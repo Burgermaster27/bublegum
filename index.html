@@ -115,6 +115,9 @@
   #result .rec { color: var(--good); font-weight: 700; margin-top: 8px; min-height: 1em; }
   #result button { margin-top: 16px; background: var(--gold); color: #2a2000; font-size: 18px; padding: 11px 30px; }
 
+  #fps { position: fixed; right: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
+    padding: 3px 7px; border-radius: 6px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
+  .opts select { background: #223; color: var(--text); border: 1px solid #445; border-radius: 6px; padding: 2px 4px; font-family: inherit; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
     font-size: 22px; color: #123; font-weight: 700; }
 
@@ -126,7 +129,7 @@
   }
 </style>
 <script type="importmap">
-{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
 </script>
 </head>
 <body>
@@ -156,6 +159,7 @@
   </div>
 </div>
 <div id="toasts"></div>
+<div id="fps"></div>
 
 <div id="aim" class="hidden">
   <h3>Натяни рогатку!</h3>
@@ -174,6 +178,15 @@
     <div class="opts">
       <label><input type="checkbox" id="opt-invert"> Инверсия тангажа (W — нос вниз)</label>
       <label><input type="checkbox" id="opt-sound" checked> Звук</label>
+      <label><input type="checkbox" id="opt-fps"> Показывать FPS</label>
+      <label>Графика:
+        <select id="opt-quality">
+          <option value="auto">Авто (подстраивается)</option>
+          <option value="low">Низкая</option>
+          <option value="medium">Средняя</option>
+          <option value="high">Высокая</option>
+        </select>
+      </label>
       <button class="reset" id="reset">Сбросить прогресс</button>
     </div>
   </div>

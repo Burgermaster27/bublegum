@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // =====================================================================
 //  Рогатка-Лёт — 3D аркадный симулятор самолёта, запускаемого из рогатки
@@ -60,7 +61,7 @@ const UPG_ORDER = ['sling', 'wings', 'tail', 'prop', 'engine', 'fuel', 'aero', '
 
 const SAVE_KEY = 'slingplane-save-v1';
 const defaultSave = () => ({
-  money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true,
+  money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'auto', showFps: false,
   lv: { sling: 0, wings: 0, tail: 0, prop: 0, engine: 0, fuel: 0, aero: 0, gear: 0 },
 });
 let save = defaultSave();
@@ -106,11 +107,9 @@ let S = computeStats(save.lv);
 //  Рендер, сцена, свет
 // =====================================================================
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ antialias: save.quality === 'high', powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -128,7 +127,7 @@ addEventListener('resize', () => {
 });
 
 const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(2400, 32, 16),
+  new THREE.SphereGeometry(900, 32, 16),
   new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new THREE.Color(0x3d86d4) }, bottom: { value: SKY_BOTTOM }, sun: { value: new V3(0.45, 0.55, 0.7).normalize() } },
@@ -212,15 +211,23 @@ function fieldColor(x, z, out) {
   return true;
 }
 
+const W_TERRAIN = 720;
 function buildTerrain() {
-  const W = 720, Z0 = -320, Z1 = 3420;
-  const geo = new THREE.PlaneGeometry(W, Z1 - Z0, 180, 748);
+  // Рельеф нарезан на участки по 375 м, чтобы невидимые куски отсекались камерой
+  const Z0 = -320, LEN = 375;
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  for (let k = 0; k < 10; k++) buildTerrainChunk(Z0 + k * LEN, LEN, mat);
+  buildRoadAndWater();
+}
+function buildTerrainChunk(z0, len, mat) {
+  const W = W_TERRAIN;
+  const geo = new THREE.PlaneGeometry(W, len, 180, Math.round(len / 5));
   geo.rotateX(-Math.PI / 2);
   const p = geo.attributes.position;
   const colors = new Float32Array(p.count * 3);
   const c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i) + (Z0 + Z1) / 2;
+    const x = p.getX(i), z = p.getZ(i) + z0 + len / 2;
     const h = terrainH(x, z);
     p.setY(i, h); p.setZ(i, z);
     const n = hash2(Math.floor(x / 6), Math.floor(z / 6));
@@ -235,9 +242,13 @@ function buildTerrain() {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+  geo.computeBoundingSphere();
+  const m = new THREE.Mesh(geo, mat);
   m.receiveShadow = true;
   scene.add(m);
+}
+function buildRoadAndWater() {
+  const W = W_TERRAIN;
 
   // Дорога — лента поверх рельефа
   const pts = [], idx = [];
@@ -273,6 +284,8 @@ const rings = [];       // { c, R, mesh, taken }
 const treeList = [];
 const world = new THREE.Group();
 scene.add(world);
+const statics = new THREE.Group();
+scene.add(statics);
 
 function addObstacle(prims, update, margin = 0) {
   let zMin = Infinity, zMax = -Infinity;
@@ -298,31 +311,38 @@ function addTree(x, z, s, pine) {
 }
 function addDecorTree(x, z, s, pine) { treeList.push({ x, y: terrainH(x, z), z, s, pine, rot: hash2(x, z) * 6.28 }); }
 
+// Инстансы раскладываются по участкам трассы — дальние участки не рисуются
+const INST_CHUNK = 400;
+function chunkedInstances(parent, geo, mat, items, shadow = true) {
+  const byChunk = new Map();
+  for (const it of items) { const k = Math.floor(it.z / INST_CHUNK); if (!byChunk.has(k)) byChunk.set(k, []); byChunk.get(k).push(it); }
+  for (const list of byChunk.values()) {
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (it.c) im.setColorAt(i, it.c); });
+    im.castShadow = shadow; im.receiveShadow = true;
+    im.computeBoundingSphere();
+    parent.add(im);
+  }
+}
 function buildTrees() {
   const trunkG = new THREE.CylinderGeometry(0.3, 0.45, 3, 6); trunkG.translate(0, 1.5, 0);
   const pineG = new THREE.ConeGeometry(2.2, 5, 7); pineG.translate(0, 5.0, 0);
   const pine2G = new THREE.ConeGeometry(1.7, 4, 7); pine2G.translate(0, 7.8, 0);
   const roundG = new THREE.IcosahedronGeometry(2.8, 0); roundG.translate(0, 5.8, 0);
-  const n = treeList.length;
-  const trunks = new THREE.InstancedMesh(trunkG, std(0x6b4a2b), n);
-  const pines = new THREE.InstancedMesh(pineG, std(0x2e6b34), n);
-  const pines2 = new THREE.InstancedMesh(pine2G, std(0x357a3b), n);
-  const rounds = new THREE.InstancedMesh(roundG, std(0x4f9a35), n);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new V3(), pos = new V3(), zero = new V3(0, 0, 0);
-  let ip = 0, ir = 0;
-  const col = new THREE.Color();
-  for (let i = 0; i < n; i++) {
-    const t = treeList[i];
-    q.setFromAxisAngle(new V3(0, 1, 0), t.rot);
+  const trunks = [], pines = [], rounds = [];
+  const q = new THREE.Quaternion(), sc = new V3(), pos = new V3();
+  for (const t of treeList) {
+    q.setFromAxisAngle(_yAxis, t.rot);
     pos.set(t.x, t.y - 0.2, t.z); sc.setScalar(t.s);
-    m.compose(pos, q, sc);
-    trunks.setMatrixAt(i, m);
-    if (t.pine) { pines.setMatrixAt(ip, m); pines2.setMatrixAt(ip, m); col.setHSL(0.33 + hash2(t.x, 3) * 0.06, 0.45, 0.25 + hash2(t.z, 1) * 0.08); pines.setColorAt(ip, col); pines2.setColorAt(ip, col); ip++; }
-    else { rounds.setMatrixAt(ir, m); col.setHSL(0.24 + hash2(t.x, 5) * 0.1, 0.5, 0.33 + hash2(t.z, 2) * 0.1); rounds.setColorAt(ir, col); ir++; }
+    const m = new THREE.Matrix4().compose(pos, q, sc);
+    trunks.push({ m, z: t.z });
+    if (t.pine) pines.push({ m, z: t.z, c: new THREE.Color().setHSL(0.33 + hash2(t.x, 3) * 0.06, 0.45, 0.25 + hash2(t.z, 1) * 0.08) });
+    else rounds.push({ m, z: t.z, c: new THREE.Color().setHSL(0.24 + hash2(t.x, 5) * 0.1, 0.5, 0.33 + hash2(t.z, 2) * 0.1) });
   }
-  pines.count = pines2.count = ip; rounds.count = ir;
-  for (const im of [trunks, pines, pines2, rounds]) { im.castShadow = true; im.receiveShadow = true; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; scene.add(im); }
-  void zero;
+  chunkedInstances(scene, trunkG, std(0x6b4a2b), trunks);
+  chunkedInstances(scene, pineG, std(0xffffff), pines);
+  chunkedInstances(scene, pine2G, std(0xffffff), pines);
+  chunkedInstances(scene, roundG, std(0xffffff), rounds);
 }
 
 function addRock(x, z, s, seed) {
@@ -330,7 +350,7 @@ function addRock(x, z, s, seed) {
   const g = jitter(new THREE.DodecahedronGeometry(s, 0), s * 0.35, seed);
   const m = mesh(g, std(0x8b8682), x, y + s * 0.45, z);
   m.rotation.set(hash2(x, 1) * 3, hash2(z, 2) * 3, 0);
-  world.add(m);
+  statics.add(m);
   addObstacle([{ t: 'sph', c: new V3(x, y + s * 0.45, z), r: s * 0.95 }]);
 }
 
@@ -338,9 +358,9 @@ function addPillar(x, z, r, H, seed) {
   const y = terrainH(x, z) - 2;
   const g = jitter(new THREE.CylinderGeometry(r * 0.72, r, H, 8, 4), r * 0.35, seed);
   const m = mesh(g, std(0x9a8170), x, y + H / 2, z);
-  world.add(m);
+  statics.add(m);
   const cap = mesh(jitter(new THREE.CylinderGeometry(r * 0.8, r * 0.74, 1.6, 8), 0.5, seed + 1), std(0x5d9a3a), x, y + H + 0.5, z);
-  world.add(cap);
+  statics.add(cap);
   if (r > 4) for (let i = 0; i < 2; i++) { const a = hash2(seed, i) * 6.28; addDecorTreeMesh(x + Math.cos(a) * r * 0.35, y + H + 1, z + Math.sin(a) * r * 0.35, 0.55); }
   addObstacle([{ t: 'cyl', x, z, r: r * 0.95, y0: y - 5, y1: y + H + 2 }]);
 }
@@ -350,14 +370,15 @@ const bladeGeo = (() => { const g = new THREE.BoxGeometry(1.1, 16, 0.25); g.tran
 function addTurbine(x, z, H, speed, phase) {
   const y = terrainH(x, z);
   const tower = mesh(new THREE.CylinderGeometry(0.75, 1.35, H, 10), std(0xf1f3f5), x, y + H / 2, z);
-  world.add(tower);
+  statics.add(tower);
   const nac = mesh(new THREE.BoxGeometry(2.2, 2.2, 5), std(0xe3e7ea), x, y + H, z + 0.8);
-  world.add(nac);
+  statics.add(nac);
   const rotor = new THREE.Group();
   rotor.position.set(x, y + H, z - 1.9);
   rotor.add(mesh(new THREE.ConeGeometry(1.1, 2, 10).rotateX(-Math.PI / 2), std(0xd94a3a)));
   for (let i = 0; i < 3; i++) { const b = mesh(bladeGeo, std(0xfafafa)); b.rotation.z = i * Math.PI * 2 / 3; rotor.add(b); const tip = mesh(new THREE.BoxGeometry(0.55, 2.2, 0.27), std(0xd94a3a)); tip.position.y = 15.3; b.add(tip); }
   world.add(rotor);
+  mergeStatic(rotor, 0);
   const hub = new V3(x, y + H, z - 1.9);
   const segs = [0, 1, 2].map(() => ({ t: 'seg', a: hub.clone(), b: hub.clone(), r: 0.75 }));
   addObstacle([{ t: 'cyl', x, z, r: 1.4, y0: y - 1, y1: y + H }, { t: 'sph', c: new V3(x, y + H, z + 0.5), r: 2.4 }, ...segs], (t) => {
@@ -400,6 +421,7 @@ function addBalloon(x, z, baseY, phase, ci) {
   }
   grp.position.set(x, gy, z);
   world.add(grp);
+  mergeStatic(grp, 0);
   const c = new V3(x, gy, z), cb = new V3(x, gy - 12.6, z);
   const prims = [{ t: 'sph', c, r: 7.3 }, { t: 'sph', c: cb, r: 1.7 }];
   addObstacle(prims, (t) => {
@@ -421,6 +443,7 @@ function addBlimp(x, z, y, amp, phase) {
   }
   grp.position.set(x, y, z);
   world.add(grp);
+  mergeStatic(grp, 0);
   const cs = [-8, 0, 8].map(() => new V3(x, y, z));
   const gc = new V3(x, y - 6.6, z);
   addObstacle([...cs.map((c) => ({ t: 'sph', c, r: 5.6 })), { t: 'sph', c: gc, r: 2.2 }], (t) => {
@@ -444,6 +467,7 @@ function addFloatingRock(x, z, y, s, seed) {
   grp.add(under);
   grp.position.set(x, y, z);
   world.add(grp);
+  mergeStatic(grp, 0);
   for (let i = 0; i < 2; i++) treeList.push({ x: x + (hash2(seed, i) - 0.5) * s, y: y + s * 0.7, z: z + (hash2(i, seed) - 0.5) * s, s: 0.45, pine: true, rot: 0 });
   const c = new V3(x, y, z);
   addObstacle([{ t: 'sph', c, r: s * 0.92 }, { t: 'sph', c: new V3(x, y - s * 0.9, z), r: s * 0.5 }], (t) => {
@@ -459,9 +483,9 @@ function addPowerLine(z) {
   for (const x of xs) {
     const y = terrainH(x, z);
     const H = 32;
-    const tower = mesh(new THREE.CylinderGeometry(0.45, 2.2, H, 4, 1), mDark, x, y + H / 2, z); tower.rotation.y = Math.PI / 4; world.add(tower);
-    const arm = mesh(new THREE.BoxGeometry(11, 0.7, 0.7), mDark, x, y + H - 4, z); world.add(arm);
-    const arm2 = mesh(new THREE.BoxGeometry(7, 0.6, 0.6), mDark, x, y + H - 0.5, z); world.add(arm2);
+    const tower = mesh(new THREE.CylinderGeometry(0.45, 2.2, H, 4, 1), mDark, x, y + H / 2, z); tower.rotation.y = Math.PI / 4; statics.add(tower);
+    const arm = mesh(new THREE.BoxGeometry(11, 0.7, 0.7), mDark, x, y + H - 4, z); statics.add(arm);
+    const arm2 = mesh(new THREE.BoxGeometry(7, 0.6, 0.6), mDark, x, y + H - 0.5, z); statics.add(arm2);
     tops.push([new V3(x - 5.2, y + H - 4.5, z), new V3(x + 5.2, y + H - 4.5, z), new V3(x, y + H + 0.2, z)]);
     prims.push({ t: 'cyl', x, z, r: 2.0, y0: y - 1, y1: y + H + 1 }, { t: 'box', min: new V3(x - 5.6, y + H - 4.6, z - 0.6), max: new V3(x + 5.6, y + H - 3.4, z + 0.6) });
   }
@@ -477,7 +501,7 @@ function addPowerLine(z) {
         const d = p.clone().sub(prev), len = d.length();
         const cm = new THREE.Mesh(unit, cableMat);
         cm.scale.y = len; cm.position.copy(prev).addScaledVector(d, 0.5); cm.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.normalize());
-        world.add(cm);
+        statics.add(cm);
         prims.push({ t: 'seg', a: prev.clone(), b: p.clone(), r: 0.35 });
         prev = p;
       }
@@ -506,18 +530,18 @@ function addWall(z, gaps, seed) {
     const w = x1 - x0, h = y1 - y0;
     const g = jitter(new THREE.BoxGeometry(w, h, TH, Math.max(1, Math.round(w / 6)), Math.max(1, Math.round(h / 6)), 2), 2.2, seed + i++);
     const m = mesh(g, std(0x9b8574), (x0 + x1) / 2, (y0 + y1) / 2, z);
-    world.add(m);
+    statics.add(m);
     prims.push({ t: 'box', min: new V3(x0 + 0.4, y0, z - TH / 2 + 0.4), max: new V3(x1 - 0.4, y1, z + TH / 2 - 0.4) });
   }
   // Кромка из травы и деревья сверху
   const top = mesh(jitter(new THREE.BoxGeometry(X1 - X0, 1.2, TH + 1, 30, 1, 2), 1.2, seed + 99), std(0x5f9a3c), 0, TOP + 0.3, z);
-  world.add(top);
+  statics.add(top);
   for (let k = 0; k < 18; k++) addDecorTreeMesh(X0 + 10 + k * 19 + hash2(seed, k) * 6, TOP + 0.6, z + (hash2(k, seed) - 0.5) * 5, 0.6 + hash2(k, k) * 0.4);
   // Подсветка проёмов — флажки по углам
   for (const gp of gaps) {
     for (const sx of [-1, 1]) for (const yy of [gp.y0, gp.y1]) {
       const f = mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), std(0xffd23d, { emissive: 0x806000 }), gp.x + sx * gp.w / 2, yy, z - TH / 2 - 0.5);
-      world.add(f);
+      statics.add(f);
     }
   }
   addObstacle(prims);
@@ -537,7 +561,7 @@ function addHouse(x, z, rot, seed) {
   grp.add(mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), std(0x8a8a8a), w * 0.25, h + 1.8, d * 0.2));
   for (const sx of [-1, 1]) grp.add(mesh(new THREE.BoxGeometry(0.1, 1.1, 1.3), std(0x5b9bd5, { emissive: 0x223344 }), sx * (w / 2 + 0.03), h * 0.55, 0, false));
   grp.position.set(x, y - 0.3, z); grp.rotation.y = rot;
-  world.add(grp);
+  statics.add(grp);
   const ext = Math.max(w, d) / 2 * (Math.abs(Math.sin(rot * 2)) * 0.41 + 1);
   addObstacle([{ t: 'box', min: new V3(x - ext, y - 2, z - ext), max: new V3(x + ext, y + h + w * 0.4, z + ext) }]);
 }
@@ -607,10 +631,13 @@ function addRing(x, y, z) {
 }
 
 // --- Декор без столкновений ---
+const CLOUD_MAT = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, emissive: 0x8a96a3 });
+const cloudRoot = new THREE.Group();
+scene.add(cloudRoot);
 function addCloud(x, y, z, s, seed) {
   const r = rng(seed);
   const grp = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, transparent: true, opacity: 0.93, emissive: 0x9aa7b5 });
+  const mat = CLOUD_MAT;
   const n = 5 + Math.floor(r() * 5);
   for (let i = 0; i < n; i++) {
     const rr = (4 + r() * 6) * s;
@@ -620,7 +647,7 @@ function addCloud(x, y, z, s, seed) {
     grp.add(p);
   }
   grp.position.set(x, y, z);
-  scene.add(grp);
+  cloudRoot.add(grp);
   return grp;
 }
 function textSprite(text, color = '#fff', bg = 'rgba(20,30,45,0.85)', w = 256, h = 128, font = 64) {
@@ -642,17 +669,17 @@ function buildDecor(R) {
   hangar.add(mesh(new THREE.BoxGeometry(18, 7, 0.4), std(0x34495e), 0, 3.5, 11));
   hangar.add(mesh(new THREE.BoxGeometry(10, 6, 0.5), std(0x1d2733), 0, 3, 11.1, false));
   hangar.position.set(-26, terrainH(-26, -38), -38); hangar.rotation.y = 0.5;
-  scene.add(hangar);
+  statics.add(hangar);
   // Ветроуказатель
-  const pole = mesh(new THREE.CylinderGeometry(0.12, 0.15, 8, 6), std(0xdddddd), 14, 4, 6); scene.add(pole);
+  const pole = mesh(new THREE.CylinderGeometry(0.12, 0.15, 8, 6), std(0xdddddd), 14, 4, 6); statics.add(pole);
   const sock = mesh(new THREE.ConeGeometry(0.7, 3.2, 10, 1, true).rotateZ(Math.PI / 2), std(0xff7a1a, { side: THREE.DoubleSide }), 15.6, 7.6, 6); scene.add(sock);
   movers.push({ update: (t) => { sock.rotation.y = -0.4 + Math.sin(t * 0.7) * 0.25; sock.rotation.z = Math.sin(t * 1.9) * 0.06; } });
   // Забор вдоль старта
   for (let i = -6; i <= 6; i++) {
     for (const sx of [-1, 1]) {
       const x = sx * 18, z = i * 4 - 4;
-      scene.add(mesh(new THREE.BoxGeometry(0.25, 1.4, 0.25), std(0x8b6a43), x, terrainH(x, z) + 0.7, z));
-      if (i < 6) scene.add(mesh(new THREE.BoxGeometry(0.12, 0.18, 4), std(0x8b6a43), x, terrainH(x, z) + 1.0, z + 2, false));
+      statics.add(mesh(new THREE.BoxGeometry(0.25, 1.4, 0.25), std(0x8b6a43), x, terrainH(x, z) + 0.7, z));
+      if (i < 6) statics.add(mesh(new THREE.BoxGeometry(0.12, 0.18, 4), std(0x8b6a43), x, terrainH(x, z) + 1.0, z + 2, false));
     }
   }
   // Стога сена, валуны, деревья вдоль долины и на склонах
@@ -661,7 +688,7 @@ function buildDecor(R) {
     if (Math.abs(z - RIVER_Z) < 40) continue;
     const y = terrainH(x, z);
     const hs = mesh(new THREE.CylinderGeometry(1.2, 1.2, 2, 10).rotateZ(Math.PI / 2), std(0xe2c15b), x, y + 1.1, z);
-    hs.rotation.y = R() * 3; scene.add(hs);
+    hs.rotation.y = R() * 3; statics.add(hs);
   }
   for (let i = 0; i < 1900; i++) {
     const side = R() < 0.5 ? -1 : 1;
@@ -673,22 +700,19 @@ function buildDecor(R) {
   for (let i = 0; i < 40; i++) { const x = (R() - 0.5) * 60, z = -60 - R() * 200; addDecorTree(x + Math.sign(x) * 20, z, 0.8 + R() * 0.6, R() < 0.5); }
   // Трава и цветы
   const tuftG = new THREE.ConeGeometry(0.35, 1.1, 4); tuftG.translate(0, 0.45, 0);
-  const NT = 7000;
-  const tufts = new THREE.InstancedMesh(tuftG, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 1 }), NT);
-  const m = new THREE.Matrix4(), c = new THREE.Color();
-  for (let i = 0; i < NT; i++) {
+  const tuftItems = [];
+  for (let i = 0; i < 7000; i++) {
     const x = (R() - 0.5) * 2 * (VALLEY + 5), z = -40 + R() * 3300;
     const y = terrainH(x, z);
-    if (y < WATER_Y + 0.3) { m.makeScale(0, 0, 0); tufts.setMatrixAt(i, m); continue; }
-    const s = 0.7 + R() * 0.9;
-    m.makeRotationY(R() * 6).scale(new V3(s, s, s)).setPosition(x, y - 0.1, z);
-    tufts.setMatrixAt(i, m);
-    const k = R();
+    const s = 0.7 + R() * 0.9, rot = R() * 6, k = R();
+    if (y < WATER_Y + 0.3) continue;
+    const c = new THREE.Color();
     if (k < 0.08) c.set(0xffe14d); else if (k < 0.13) c.set(0xffffff); else if (k < 0.17) c.set(0xe8506a); else if (k < 0.2) c.set(0xa07cf0);
     else c.setHSL(0.25 + R() * 0.08, 0.55, 0.3 + R() * 0.12);
-    tufts.setColorAt(i, c);
+    tuftItems.push({ m: new THREE.Matrix4().makeRotationY(rot).scale(new V3(s, s, s)).setPosition(x, y - 0.1, z), z, c });
   }
-  tufts.receiveShadow = true;
+  const tufts = new THREE.Group(); tufts.name = 'tufts';
+  chunkedInstances(tufts, tuftG, new THREE.MeshLambertMaterial({ flatShading: true }), tuftItems, false);
   scene.add(tufts);
   // Мост через реку
   const bx = roadX(RIVER_Z);
@@ -697,16 +721,15 @@ function buildDecor(R) {
   for (const sx of [-1, 1]) bridge.add(mesh(new THREE.BoxGeometry(0.3, 1.2, 50), std(0x6b4f30), sx * 3.4, 0.8, 0));
   for (let k = -2; k <= 2; k++) bridge.add(mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), std(0x5b3f22), 0, -3, k * 10));
   bridge.position.set(bx, 0.4, RIVER_Z);
-  scene.add(bridge);
+  statics.add(bridge);
   // Облака
-  const clouds = [];
-  for (let i = 0; i < 80; i++) clouds.push(addCloud((R() - 0.5) * 700, 70 + R() * 110, -200 + R() * 3600, 0.8 + R() * 1.2, i * 13 + 5));
-  movers.push({ update: (t, dt) => { for (const cl of clouds) { cl.position.x += dt * 1.5; if (cl.position.x > 380) cl.position.x = -380; } } });
+  for (let i = 0; i < 80; i++) (addCloud((R() - 0.5) * 700, 70 + R() * 110, -200 + R() * 3600, 0.8 + R() * 1.2, i * 13 + 5));
+  movers.push({ update: (t) => { cloudRoot.position.x = Math.sin(t * 0.01) * 40; } });
   // Таблички расстояний
   for (let d = 250; d < FINISH_Z; d += 250) {
     for (const sx of [-1, 1]) {
       const x = sx * 98, y = terrainH(x, d);
-      scene.add(mesh(new THREE.CylinderGeometry(0.25, 0.25, 14, 6), std(0xeeeeee), x, y + 7, d));
+      statics.add(mesh(new THREE.CylinderGeometry(0.25, 0.25, 14, 6), std(0xeeeeee), x, y + 7, d));
       const sp = textSprite(`${d} м`); sp.scale.set(10, 5, 1); sp.position.set(x, y + 16, d); scene.add(sp);
     }
   }
@@ -865,6 +888,37 @@ function generateWorld() {
   obstacles.sort((a, b) => a.zMin - b.zMin);
 }
 
+// Склеиваем неподвижные меши в несколько больших по материалу и участку трассы —
+// так вместо тысяч вызовов отрисовки остаются десятки.
+function mergeStatic(root, chunk = 300) {
+  root.updateMatrixWorld(true);
+  const buckets = new Map(), done = [];
+  const wp = new V3(), rootInv = root.matrixWorld.clone().invert(), rel = new THREE.Matrix4();
+  root.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.material.map) return;
+    o.getWorldPosition(wp);
+    const key = `${o.material.uuid}|${o.castShadow}|${chunk ? Math.floor(wp.z / chunk) : 0}`;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(rel.multiplyMatrices(rootInv, o.matrixWorld));
+    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && !(name === 'color' && o.material.vertexColors)) g.deleteAttribute(name);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g.clearGroups();
+    if (!buckets.has(key)) buckets.set(key, { mat: o.material, cast: o.castShadow, geos: [] });
+    buckets.get(key).geos.push(g);
+    done.push(o);
+  });
+  for (const o of done) o.parent.remove(o);
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos, false);
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, b.mat);
+    m.castShadow = b.cast; m.receiveShadow = true;
+    m.matrixAutoUpdate = false;
+    root.add(m);
+    b.geos.forEach((g) => g.dispose());
+  }
+}
+
 // =====================================================================
 //  Рогатка
 // =====================================================================
@@ -887,7 +941,7 @@ function buildSlingshot() {
     g.add(mesh(new THREE.SphereGeometry(0.45, 8, 6), wood, b.x, b.y, b.z));
   }
   g.add(mesh(new THREE.CylinderGeometry(3.4, 3.8, 0.6, 10), std(0x7c7c7c), 0, 0.2, 1.8));
-  scene.add(g);
+  statics.add(g);
   for (const b of bands) { b.castShadow = true; scene.add(b); }
   scene.add(pouch);
 }
@@ -1525,6 +1579,8 @@ function renderStats() {
     bar('Сопротивление', (s.cd0 * 10000).toFixed(1), 1 - (s.cd0 - 0.0005) / 0.0008);
   $('records').innerHTML = `Рекорд: <b>${save.best} м</b> из ${FINISH_Z} · Полётов: <b>${save.flights}</b>${save.finishes ? ` · Финишей: <b>${save.finishes}</b>` : ''}`;
   $('opt-invert').checked = !!save.invert;
+  $('opt-quality').value = save.quality;
+  $('opt-fps').checked = !!save.showFps;
   $('opt-sound').checked = !!save.sound;
 }
 function updateAimHud() {
@@ -1556,6 +1612,12 @@ function updateFlightHud() {
 $('go').addEventListener('click', () => enterAim());
 $('r-ok').addEventListener('click', () => enterHangar());
 $('opt-invert').addEventListener('change', (e) => { save.invert = e.target.checked; persist(); });
+$('opt-quality').addEventListener('change', (e) => {
+  const needReload = (e.target.value === 'high') !== (save.quality === 'high');   // сглаживание меняется только при перезагрузке
+  save.quality = e.target.value; persist();
+  if (needReload) location.reload(); else applyQuality();
+});
+$('opt-fps').addEventListener('change', (e) => { save.showFps = e.target.checked; persist(); $('fps').style.display = save.showFps ? 'block' : 'none'; });
 $('opt-sound').addEventListener('change', (e) => { save.sound = e.target.checked; persist(); Sound.setMuted(!save.sound); });
 $('reset').addEventListener('click', () => {
   if (!confirm('Сбросить весь прогресс и деньги?')) return;
@@ -1626,6 +1688,51 @@ function updateCamera(dt) {
 }
 
 // =====================================================================
+//  Качество графики и счётчик FPS
+// =====================================================================
+
+// auto — как «среднее», но разрешение рендера само подстраивается под FPS
+const QUALITY = {
+  high: { scale: Math.min(devicePixelRatio, 2), shadow: 2048, soft: true, tufts: true, far: 1500 },
+  medium: { scale: 1, shadow: 1024, soft: false, tufts: true, far: 1300 },
+  auto: { scale: 1, shadow: 1024, soft: false, tufts: true, far: 1300 },
+  low: { scale: 0.7, shadow: 0, soft: false, tufts: false, far: 1000 },
+};
+let renderScale = 1;
+function applyQuality() {
+  const q = QUALITY[save.quality] || QUALITY.auto;
+  renderScale = q.scale;
+  renderer.setPixelRatio(renderScale);
+  renderer.shadowMap.enabled = q.shadow > 0;
+  renderer.shadowMap.type = q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  sun.castShadow = q.shadow > 0;
+  if (q.shadow && sun.shadow.mapSize.x !== q.shadow) {
+    sun.shadow.mapSize.set(q.shadow, q.shadow);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  }
+  const tufts = scene.getObjectByName('tufts'); if (tufts) tufts.visible = q.tufts;
+  camera.far = q.far; camera.updateProjectionMatrix();
+  scene.fog.far = q.far - 200;
+  scene.traverse((o) => { if (o.material && !Array.isArray(o.material)) o.material.needsUpdate = true; });
+}
+const fpsMeter = { frames: 0, time: 0, fps: 60 };
+function updateFps(dt) {
+  fpsMeter.frames++; fpsMeter.time += dt;
+  if (fpsMeter.time < 1) return;
+  fpsMeter.fps = fpsMeter.frames / fpsMeter.time;
+  fpsMeter.frames = 0; fpsMeter.time = 0;
+  const el = $('fps');
+  el.style.display = save.showFps ? 'block' : 'none';
+  el.textContent = `${Math.round(fpsMeter.fps)} FPS · ${Math.round(renderScale * 100)}%`;
+  if (save.quality === 'auto') {
+    let next = renderScale;
+    if (fpsMeter.fps < 45) next = Math.max(0.5, renderScale - 0.1);
+    else if (fpsMeter.fps > 58) next = Math.min(Math.min(devicePixelRatio, 1.5), renderScale + 0.05);
+    if (Math.abs(next - renderScale) > 0.001) { renderScale = next; renderer.setPixelRatio(renderScale); }
+  }
+}
+
+// =====================================================================
 //  Главный цикл
 // =====================================================================
 
@@ -1637,6 +1744,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   simTime += dt;
+  updateFps(dt);
 
   for (const m of movers) m.update(simTime, dt);
   updateCoins(simTime);
@@ -1704,6 +1812,9 @@ function frame(now) {
 buildTerrain();
 generateWorld();
 buildSlingshot();
+mergeStatic(statics);
+mergeStatic(cloudRoot, 600);
+applyQuality();
 enterHangar();
 camPos.set(8, launchBase.y + 3, -8);
 camLook.copy(launchBase);
@@ -1711,4 +1822,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
