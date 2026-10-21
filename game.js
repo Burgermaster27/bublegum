@@ -651,7 +651,7 @@ function coinFaceTexture() {
   return t;
 }
 let coinMesh;
-function addCoin(x, y, z) { coins.push({ pos: new V3(x, y, z), taken: false }); }
+function addCoin(x, y, z) { coins.push({ pos: new V3(x, y, z), from: new V3(), taken: false, anim: 1 }); }
 function coinLine(x0, y0, z0, x1, y1, z1, n, arc = 0) {
   for (let i = 0; i < n; i++) {
     const t = n === 1 ? 0.5 : i / (n - 1);
@@ -667,12 +667,25 @@ function buildCoins() {
   scene.add(coinMesh);
 }
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new V3(), _yAxis = new V3(0, 1, 0);
-function updateCoins(t) {
+const COIN_ANIM = 0.38;
+const _cp = new V3();
+function updateCoins(t, dt) {
   for (let i = 0; i < coins.length; i++) {
     const c = coins[i];
-    _q.setFromAxisAngle(_yAxis, t * 2.5 + i * 0.4);
-    _s.setScalar(c.taken ? 0.0001 : 1);
-    _m4.compose(c.pos, _q, _s);
+    if (!c.taken) {
+      _q.setFromAxisAngle(_yAxis, t * 2.5 + i * 0.4);
+      _m4.compose(c.pos, _q, _s.setScalar(1));
+    } else if (c.anim < 1) {
+      // Подбор: монета быстро крутится, подскакивает к самолёту, раздувается и исчезает
+      c.anim = Math.min(1, c.anim + dt / COIN_ANIM);
+      const k = c.anim;
+      _cp.copy(c.from).lerp(P.pos, k * k).add(_vb.set(0, Math.sin(k * Math.PI) * 1.6, 0));
+      _q.setFromAxisAngle(_yAxis, t * 2.5 + i * 0.4 + k * 14);
+      const sc = k < 0.35 ? 1 + k / 0.35 * 0.45 : 1.45 * (1 - (k - 0.35) / 0.65);
+      _m4.compose(_cp, _q, _s.setScalar(Math.max(0.0001, sc)));
+    } else {
+      _m4.compose(c.pos, _q, _s.setScalar(0.0001));
+    }
     coinMesh.setMatrixAt(i, _m4);
   }
   coinMesh.instanceMatrix.needsUpdate = true;
@@ -776,13 +789,8 @@ function buildDecor(R) {
   for (const sx of [-1, 1]) bridge.add(mesh(new THREE.BoxGeometry(0.3, 1.2, 50), std(0x6b4f30), sx * 3.4, 0.8, 0));
   for (let k = -2; k <= 2; k++) bridge.add(mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), std(0x5b3f22), 0, -3, k * 10));
   bridge.position.set(bx, 0.4, RIVER_Z);
-  // Мост — препятствие: настил, перила и опоры
-  addObstacle([
-    { t: 'box', min: new V3(bx - 3.5, 0.1, RIVER_Z - 25), max: new V3(bx + 3.5, 0.7, RIVER_Z + 25) },
-    { t: 'box', min: new V3(bx - 3.55, 0.6, RIVER_Z - 25), max: new V3(bx - 3.25, 1.8, RIVER_Z + 25) },
-    { t: 'box', min: new V3(bx + 3.25, 0.6, RIVER_Z - 25), max: new V3(bx + 3.55, 1.8, RIVER_Z + 25) },
-    ...[-2, -1, 0, 1, 2].map((k) => ({ t: 'cyl', x: bx, z: RIVER_Z + k * 10, r: 0.4, y0: -6, y1: 0.4 })),
-  ]);
+  // Настил моста — это «земля», на него можно сесть (см. surfaceAt); твёрдые только опоры под ним
+  addObstacle([-2, -1, 0, 1, 2].map((k) => ({ t: 'cyl', x: bx, z: RIVER_Z + k * 10, r: 0.4, y0: -6, y1: 0.1 })));
   statics.add(bridge);
   // Облака
   for (let i = 0; i < 80; i++) (addCloud((R() - 0.5) * 700, 70 + R() * 110, -200 + R() * 3600, 0.8 + R() * 1.2, i * 13 + 5));
@@ -1194,6 +1202,41 @@ function spawnDebris(pos, vel, colors) {
   }
   for (let i = 0; i < 14; i++) spawnPuff(pos.clone().add(new V3((Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3)), i % 2 ? 0x555555 : 0xffa040, 1.5 + Math.random() * 1.5, 1.6);
 }
+// Расходящиеся круги на воде
+const ripples = [];
+const rippleGeo = new THREE.RingGeometry(0.8, 1.0, 40).rotateX(-Math.PI / 2);
+function spawnRipple(pos, delay = 0) {
+  const m = new THREE.Mesh(rippleGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+  m.position.set(pos.x, WATER_Y + 0.05, pos.z);
+  scene.add(m);
+  ripples.push({ m, t: -delay });
+}
+function updateRipples(dt) {
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.t += dt;
+    if (r.t < 0) continue;
+    const k = r.t / 2.2;
+    r.m.scale.setScalar(1 + k * 9);
+    r.m.material.opacity = 0.7 * (1 - k);
+    if (k >= 1) { scene.remove(r.m); r.m.material.dispose(); ripples.splice(i, 1); }
+  }
+}
+function updateSinking(dt) {
+  P.sinkT += dt;
+  const t = P.sinkT;
+  P.vel.multiplyScalar(Math.max(0, 1 - dt * 1.5));
+  P.pos.x += P.vel.x * dt; P.pos.z += P.vel.z * dt;
+  P.pos.y = WATER_Y + 0.2 - Math.min(5, t * t * 0.55);          // сначала держится на воде, потом всё быстрее уходит вниз
+  P.q.multiply(_dq.setFromAxisAngle(_l.set(1, 0, 0), dt * 0.35));  // клюёт носом
+  P.q.multiply(_dq.setFromAxisAngle(_l.set(0, 0, 1), dt * 0.12 * Math.sin(t * 2)));  // покачивается
+  P.bubbleT = (P.bubbleT || 0) + dt;
+  if (P.bubbleT > 0.08 && t < 3) {
+    P.bubbleT = 0;
+    spawnPuff(new V3(P.pos.x + (Math.random() - 0.5) * 2, WATER_Y + 0.1, P.pos.z + (Math.random() - 0.5) * 2), 0xffffff, 0.25 + Math.random() * 0.2, 0.6, new V3(0, 1.2, 0));
+  }
+  if (Math.floor((t - dt) / 0.7) !== Math.floor(t / 0.7) && t < 2.5) spawnRipple(P.pos);
+}
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
@@ -1355,9 +1398,13 @@ function addFurrow(pos, heading, n) {
 }
 function clearFurrows() { for (const g of furrows) scene.remove(g); furrows.length = 0; }
 
+// Поверхность под точкой: рельеф, настил моста или вода
+const BRIDGE = { x: roadX(RIVER_Z), half: 3.4, len: 25, top: 0.7 };
+function onBridge(x, z) { return Math.abs(x - BRIDGE.x) < BRIDGE.half && Math.abs(z - RIVER_Z) < BRIDGE.len; }
 function groundContact(dt) {
-  const gh = terrainH(P.pos.x, P.pos.z);
-  const inRiver = Math.abs(P.pos.z - RIVER_Z) < 23 && gh < WATER_Y;
+  const bridge = onBridge(P.pos.x, P.pos.z);
+  const gh = bridge ? Math.max(BRIDGE.top, terrainH(P.pos.x, P.pos.z)) : terrainH(P.pos.x, P.pos.z);
+  const inRiver = !bridge && Math.abs(P.pos.z - RIVER_Z) < 23 && gh < WATER_Y;
   const surf = inRiver ? WATER_Y : gh;
   const clearance = S.gear ? 1.15 : 0.5;
   // Севший на брюхо крылатый самолёт уже не взлетит: прижимаем его к земле до остановки
@@ -1408,7 +1455,7 @@ function groundContact(dt) {
   // Ложимся по склону: «верх» самолёта — нормаль рельефа, нос — по курсу движения
   const heading = Math.atan2(P.vel.x || _f.x, P.vel.z || _f.z);
   const n = _tmp.set(terrainH(P.pos.x - 1, P.pos.z) - terrainH(P.pos.x + 1, P.pos.z), 2, terrainH(P.pos.x, P.pos.z - 1) - terrainH(P.pos.x, P.pos.z + 1)).normalize();
-  if (inRiver) n.set(0, 1, 0);
+  if (inRiver || bridge) n.set(0, 1, 0);
   const fw = _tmp2.set(Math.sin(heading), 0, Math.cos(heading));
   fw.addScaledVector(n, -fw.dot(n)).normalize();
   const side = _vb.crossVectors(n, fw);
@@ -1417,7 +1464,7 @@ function groundContact(dt) {
   P.q.slerp(_qi, Math.min(1, dt * 4));
   P.w.multiplyScalar(Math.max(0, 1 - dt * 6));
   if (!S.gear && hv > 4 && Math.random() < dt * 25) spawnPuff(P.pos.clone().add(new V3(0, -0.4, 0)), 0xc9b48a, 0.8, 0.8);
-  if (!S.gear && hv > 0.8 && !inRiver && P.pos.distanceToSquared(P.lastFurrow) > 0.36) { addFurrow(P.pos, heading, n); P.lastFurrow.copy(P.pos); }
+  if (!S.gear && hv > 0.8 && !inRiver && !bridge && P.pos.distanceToSquared(P.lastFurrow) > 0.36) { addFurrow(P.pos, heading, n); P.lastFurrow.copy(P.pos); }
   if (hv < 1.5 && !(P.throttle)) { P.stopTimer += dt; if (P.stopTimer > 0.6) endFlight('landed'); }
   else P.stopTimer = 0;
 }
@@ -1480,11 +1527,31 @@ function checkCollisions() {
   return false;
 }
 
+const COIN_PICK_R = COIN_R * 1.35;     // зона подбора чуть больше самой монеты
+function distToSeg(p, a, b) {
+  const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+  const l2 = abx * abx + aby * aby + abz * abz;
+  const t = l2 > 0 ? clamp(((p.x - a.x) * abx + (p.y - a.y) * aby + (p.z - a.z) * abz) / l2, 0, 1) : 0;
+  return Math.hypot(p.x - a.x - abx * t, p.y - a.y - aby * t, p.z - a.z - abz * t);
+}
+const _wl = new V3(), _wr = new V3(), _tail = new V3();
 function collectStuff() {
+  // Монету собирает любая часть самолёта: фюзеляж (с учётом пролёта за кадр) или крылья
+  _f.set(0, 0, 1).applyQuaternion(P.q);
+  _l.set(1, 0, 0).applyQuaternion(P.q);
+  _tail.copy(P.pos).addScaledVector(_f, -2.1);
+  const half = S.span / 2;
+  _wl.copy(P.pos).addScaledVector(_l, half); _wr.copy(P.pos).addScaledVector(_l, -half);
   for (const c of coins) {
     if (c.taken) continue;
-    if (Math.abs(c.pos.z - P.pos.z) > 4) continue;
-    if (c.pos.distanceToSquared(P.pos) < 2.8 * 2.8) { c.taken = true; P.coins += 5; Sound.blip(880, 0.1, 'triangle', 0.18); }
+    if (Math.abs(c.pos.z - P.pos.z) > 8) continue;
+    const hit = distToSeg(c.pos, P.prevNose, _tail) < COIN_PICK_R + 0.5 || (half > 0 && distToSeg(c.pos, _wl, _wr) < COIN_PICK_R + 0.15);
+    if (hit) {
+      c.taken = true; c.anim = 0; c.from.copy(c.pos);
+      P.coins += 5;
+      Sound.blip(880 + Math.random() * 120, 0.1, 'triangle', 0.18);
+      for (let i = 0; i < 6; i++) spawnPuff(c.pos.clone(), 0xffe066, 0.18, 0.45, new V3((Math.random() - 0.5) * 6, (Math.random() - 0.2) * 6, (Math.random() - 0.5) * 6));
+    }
   }
   // Кольцо засчитывается, только если сквозь него прошёл весь фюзеляж:
   // и нос, и хвост пересекли плоскость кольца внутри него (с запасом на толщину корпуса)
@@ -1578,7 +1645,7 @@ function updateTrajectory() {
 }
 
 function resetRun() {
-  for (const c of coins) c.taken = false;
+  for (const c of coins) { c.taken = false; c.anim = 1; }
   for (const r of rings) { r.taken = false; r.noseOk = null; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
   clearFurrows();
   Object.assign(P, { fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false });
@@ -1629,9 +1696,13 @@ function endFlight(reason, detail = '') {
     P.vel.multiplyScalar(0);
     P.detail = detail;
   } else if (reason === 'splash') {
-    for (let i = 0; i < 18; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4)), 0xd6f0ff, 1.2, 1.3, new V3((Math.random() - 0.5) * 6, 4 + Math.random() * 6, (Math.random() - 0.5) * 6));
-    Sound.thud(0.5, 0.7);
-    P.vel.multiplyScalar(0.05);
+    // Тонет: брызги при ударе, дальше самолёт медленно уходит под воду носом вперёд
+    const sp = P.vel.length();
+    for (let i = 0; i < 16; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3)), 0xe3f4ff, 0.9, 1.0, new V3((Math.random() - 0.5) * 5, 3 + Math.random() * Math.min(8, sp * 0.15), (Math.random() - 0.5) * 5));
+    spawnRipple(P.pos);
+    Sound.thud(0.4, 0.6);
+    P.vel.set(P.vel.x * 0.15, 0, P.vel.z * 0.15);
+    P.sinkT = 0;
   } else if (reason === 'landed') {
     P.landed = true;
   }
@@ -1652,10 +1723,10 @@ function finishResults() {
   if (P.finished) { save.finishes++; rec = save.finishes === 1 ? 'Ты долетел до финиша! Ура! Попробуй ещё и собери все кольца.' : rec; }
   persist();
 
-  const titles = { crash: 'Крушение!', splash: 'Плюх! В реку', landed: 'Посадка', finish: 'ФИНИШ!', quit: 'Полёт завершён', out: 'Улетел за пределы' };
+  const titles = { crash: 'Крушение!', splash: 'Буль-буль!', landed: 'Посадка', finish: 'ФИНИШ!', quit: 'Полёт завершён', out: 'Улетел за пределы' };
   const reasons = {
     crash: P.detail || 'Самолёт разбился',
-    splash: 'Самолёт упал в воду',
+    splash: 'Самолёт утонул в реке',
     landed: P.lastImpact < 2.5 && P.bounces === 0 ? 'Идеальная посадка!' : 'Самолёт остановился',
     finish: 'Ты пересёк финишную черту!',
     quit: 'Полёт прерван', out: 'Самолёт улетел за горы',
@@ -1984,7 +2055,7 @@ function frame(now) {
   updateTouchUi();
 
   for (const m of movers) m.update(simTime, dt);
-  updateCoins(simTime);
+  updateCoins(simTime, dt);
 
   if (mode === 'aim') {
     const rate = 32;
@@ -2027,10 +2098,11 @@ function frame(now) {
     } else {
       P.endTime += dt;
       if (P.reason === 'finish') P.pos.addScaledVector(P.vel, dt);
+      if (P.reason === 'splash') updateSinking(dt);
       plane.position.copy(P.pos);
       plane.quaternion.copy(P.q);
       Sound.update(0, false);
-      if (P.endTime > (P.reason === 'landed' ? 0.8 : 1.8)) finishResults();
+      if (P.endTime > (P.reason === 'landed' ? 0.8 : P.reason === 'splash' ? 3.2 : 1.8)) finishResults();
     }
     relaxBands(dt);
   } else if (mode === 'hangar' || mode === 'result') {
@@ -2039,6 +2111,7 @@ function frame(now) {
   }
 
   updateParticles(dt);
+  updateRipples(dt);
   updateCamera(dt);
   renderer.render(scene, camera);
 }
@@ -2060,4 +2133,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
