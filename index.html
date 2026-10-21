@@ -131,6 +131,16 @@
   #go { position: absolute; left: calc((100vw - min(430px, 48vw) - 14px) / 2); bottom: 26px; transform: translateX(-50%);
     background: linear-gradient(180deg, #ffd84d, #ffae1a); color: #3a2400; font-size: 24px; padding: 14px 44px;
     border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,.3); white-space: nowrap; }
+  /* переключатель миров над кнопкой старта */
+  #levelbar { position: absolute; left: calc((100vw - min(430px, 48vw) - 14px) / 2); bottom: 100px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; background: var(--panel); border-radius: 16px; padding: 6px; width: min(360px, 44vw); }
+  #levelbar button { width: 40px; height: 48px; border-radius: 12px; background: rgba(255,255,255,.1); color: var(--text); font-size: 26px; padding: 0; flex: none; }
+  #levelbar button:disabled { opacity: .3; }
+  #lv-info { flex: 1; text-align: center; min-width: 0; }
+  #lv-name { font-weight: 800; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lv-sub { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lv-sub .done { color: var(--good); font-weight: 700; }
+  #go:disabled { filter: grayscale(1) brightness(.7); cursor: not-allowed; }
   #go:hover { filter: brightness(1.07); }
   .opts { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
   .opts label { cursor: pointer; display: flex; gap: 8px; align-items: center; }
@@ -183,6 +193,9 @@
     #shop header { padding: 8px 12px; }
     .card { padding: 8px 10px; }
     #go { left: calc((48vw - 8px) / 2); bottom: 10px; font-size: 18px; padding: 10px 26px; }
+    #levelbar { left: calc((48vw - 8px) / 2); bottom: 66px; width: 42vw; padding: 4px; }
+    #levelbar button { height: 38px; width: 34px; }
+    #lv-name { font-size: 14px; }
     #result .box { padding: 12px 18px; }
     #result h2 { font-size: 22px; }
     #result button { margin-top: 8px; }
@@ -203,8 +216,9 @@
 
   @media (max-width: 760px) {
     #left-panel { display: none; }
-    #shop { width: auto; left: 14px; bottom: 96px; }
+    #shop { width: auto; left: 14px; bottom: 160px; }
     #go { left: 50%; bottom: 20px; }
+    #levelbar { left: 50%; bottom: 94px; width: calc(100vw - 28px); }
     #hud-help { display: none; }
     /* вертикальный телефон: компактный HUD */
     #hud-stats { min-width: 0; padding: 6px 10px; }
@@ -278,13 +292,18 @@
 <div id="hangar" class="safe hidden">
   <div id="left-panel">
     <h1>Рогатка-Лёт</h1>
-    <div class="sub">Доберись до финиша в 3 км, облетая препятствия.</div>
+    <div class="sub">Пролети 10 миров, облетая препятствия.</div>
     <div id="stats"></div>
     <div id="records"></div>
   </div>
   <div id="shop">
     <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money"><i class="coin"></i><span id="s-money">0</span></div></header>
     <div id="cards"></div>
+  </div>
+  <div id="levelbar">
+    <button id="lv-prev" aria-label="Предыдущий мир">‹</button>
+    <div id="lv-info"><div id="lv-name"></div><div id="lv-sub"></div></div>
+    <button id="lv-next" aria-label="Следующий мир">›</button>
   </div>
   <button id="go">На старт ▶</button>
 </div>
@@ -306,6 +325,7 @@
       <div class="sbtns">
         <button class="ghost" id="dev-max">Всё на максимум</button>
         <button class="ghost" id="dev-zero">Обнулить прокачку</button>
+        <button class="ghost" id="dev-worlds">Открыть все миры</button>
       </div>
     </div>
     <label class="srow" for="opt-invert"><span>Управление как в самолёте<small>Джойстик или W/S: «на себя» — нос вверх</small></span><input type="checkbox" id="opt-invert"></label>
