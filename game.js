@@ -2245,6 +2245,25 @@ document.querySelectorAll('#opt-quality button').forEach((b) => b.addEventListen
 }));
 $('open-settings').addEventListener('click', () => { renderStats(); show('settings'); });
 $('set-close').addEventListener('click', () => hide('settings'));
+// Секрет для создателя: 5 быстрых нажатий на заголовок «Настройки» открывают режим разработчика
+let devTaps = 0, devTimer = 0;
+$('set-title').addEventListener('click', () => {
+  clearTimeout(devTimer);
+  devTimer = setTimeout(() => { devTaps = 0; }, 1500);
+  if (++devTaps >= 5) { devTaps = 0; save.dev = !save.dev; persist(); $('dev').classList.toggle('hidden', !save.dev); toast(save.dev ? 'Режим создателя включён' : 'Режим создателя выключен'); }
+});
+document.querySelectorAll('#dev [data-money]').forEach((b) => b.addEventListener('click', () => {
+  save.money += +b.dataset.money; persist(); renderShop(); toast(`+${(+b.dataset.money).toLocaleString('ru-RU')}`);
+}));
+$('dev-max').addEventListener('click', () => {
+  for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
+  persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
+});
+$('dev-zero').addEventListener('click', () => {
+  for (const k of UPG_ORDER) save.lv[k] = 0;
+  persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Прокачка обнулена');
+});
+$('dev').classList.toggle('hidden', !save.dev);
 $('settings').addEventListener('click', (e) => { if (e.target.id === 'settings') hide('settings'); });
 $('opt-fps').addEventListener('change', (e) => { save.showFps = e.target.checked; persist(); $('fps').style.display = save.showFps ? 'block' : 'none'; });
 $('opt-sound').addEventListener('change', (e) => { save.sound = e.target.checked; persist(); Sound.setMuted(!save.sound); });
