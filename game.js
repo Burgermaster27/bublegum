@@ -26,7 +26,7 @@ const VALLEY = 105;          // полуширина долины, дальше 
 const RIVER_Z = 760;
 const WATER_Y = -1.6;
 const THIN_AIR = 130;
-const MAX_AIM_PITCH = 52;       // круче рогатка не запускает        // выше этой высоты воздух разрежается
+const MAX_AIM_PITCH = 45;       // круче рогатка не запускает        // выше этой высоты воздух разрежается
 
 // =====================================================================
 //  Прокачка
@@ -1494,6 +1494,7 @@ function launch() {
   P.vel.copy(_f).multiplyScalar(S.launch * power);
   P.w.set(0, 0, 0);
   mode = 'flight';
+  camHeading.set(_f.x, 0, _f.z).normalize();
   hide('aim'); hide('aim-hint'); show('hud');
   $('hud-fuel').classList.toggle('hidden', S.thrust <= 0);
   Sound.blip(180, 0.3, 'sawtooth', 0.2);
@@ -1768,7 +1769,7 @@ function updateTouchUi() {
 //  Камера
 // =====================================================================
 
-const camLook = new V3(), camPos = new V3();
+const camLook = new V3(), camPos = new V3(), camHeading = new V3(0, 0, 1);
 let orbit = 0;
 function updateCamera(dt) {
   if (mode === 'hangar') {
@@ -1795,7 +1796,12 @@ function updateCamera(dt) {
     if (v > 3) { _vd.copy(P.vel).divideScalar(v); look.lerp(_vd, save.lv.tail > 0 ? 0.4 : 0.8); }
     if (look.lengthSq() < 1e-4) look.set(0, 0, 1);
     look.normalize();
-    look.y = clamp(look.y, -0.7, 0.7);
+    // Камера держит курс почти горизонтально и наклоняется лишь на треть угла полёта:
+    // при наборе высоты в кадре остаются земля и горизонт, а не одно небо
+    const hl = Math.hypot(look.x, look.z);
+    if (hl > 0.15) camHeading.set(look.x / hl, 0, look.z / hl);
+    const camPitch = clamp(Math.asin(clamp(look.y, -1, 1)) * 0.35, -0.3, 0.22);
+    look.copy(camHeading).multiplyScalar(Math.cos(camPitch)).add(_vb.set(0, Math.sin(camPitch), 0));
     const dist = P.ended ? 16 : 9.5 + v * 0.03;
     const target = _tmp.copy(P.pos).addScaledVector(look, -dist).add(_vb.set(0, P.ended ? 6 : 2.8, 0));
     const gh = terrainH(target.x, target.z) + 1.5;
