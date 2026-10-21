@@ -1517,7 +1517,7 @@ function genValley() {
   coinLine(26, 44, 1240, 26, 44, 1260, 3);
   coinLine(26, 22, 1400, 26, 22, 1440, 5);
   coinLine(-20, 16, 1600, -20, 16, 1640, 5, -3);
-  addRing(-26, 26, 1100);
+  addRing(-52, 22, 1165);
   addRing(52, 30, 1300);
   addRing(0, 18, 1620);
 
@@ -1751,9 +1751,40 @@ function loadLevel(i) {
   buildTrees();
   buildCoins();
   obstacles.sort((a, b) => a.zMin - b.zMin);
+  fixRings();
   mergeStatic(statics);
   mergeStatic(cloudRoot, 600);
   applyQuality();
+}
+// Кольцо честное, только если к нему можно подлететь по прямой и пролететь насквозь,
+// при любом положении движущихся препятствий. Иначе сдвигаем его на ближайшее свободное место.
+function ringPathClear(x, y, z) {
+  const saved = P.pos.clone(), savedQ = P.q.clone(), savedS = S;
+  S = { ...S, span: Math.max(S.span, 10) };       // считаем самолёт шире, чтобы оставался запас
+  P.q.identity();
+  let ok = true;
+  for (let t = 0; t < 24 && ok; t += 0.6) {
+    for (const m of movers) m.update(t, 0);
+    for (let zz = z - 45; zz <= z + 35; zz += 1.5) { P.pos.set(x, y, zz); if (checkCollisions()) { ok = false; break; } }
+  }
+  P.pos.copy(saved); P.q.copy(savedQ); S = savedS;
+  return ok;
+}
+function fixRings() {
+  const cands = [];
+  for (const dz of [0, -25, 25, -50, 50]) for (const dx of [0, -12, 12, -24, 24, -36, 36]) for (const dy of [0, 8, -6, 16]) cands.push([dx, dy, dz]);
+  cands.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    if (ringPathClear(r.c.x, r.c.y, r.c.z)) continue;
+    let moved = false;
+    for (const [dx, dy, dz] of cands) {
+      const x = r.c.x + dx, z = r.c.z + dz, y = r.c.y + dy;
+      if (Math.abs(x) > VALLEY - 12 || z > FINISH_Z - 20 || y < terrainH(x, z) + 9 || nearWater(z, 5)) continue;
+      if (ringPathClear(x, y, z)) { r.c.set(x, y, z); r.mesh.position.copy(r.c); moved = true; break; }
+    }
+    if (!moved) { r.mesh.parent.remove(r.mesh); rings.splice(i, 1); }
+  }
 }
 
 // =====================================================================
@@ -3007,12 +3038,13 @@ function renderLevelBar() {
     : `🔒 Долети до финиша в мире «${LEVELS[viewLevel - 1].name}»`;
   $('lv-prev').disabled = viewLevel === 0;
   $('lv-next').disabled = viewLevel === LEVELS.length - 1;
-  $('go').disabled = !open || viewLevel !== levelIdx;
+  $('go').disabled = viewLevel !== levelIdx;
 }
-function selectLevel(i) {
+// force — переход из меню разработчика, в том числе в закрытый мир (прогресс не меняется)
+function selectLevel(i, force = false) {
   viewLevel = clamp(i, 0, LEVELS.length - 1);
   renderLevelBar();
-  if (viewLevel > save.unlocked || viewLevel === levelIdx) return;
+  if ((viewLevel > save.unlocked && !force) || viewLevel === levelIdx) return;
   // Пересборка мира занимает долю секунды — показываем заставку и строим на следующем кадре
   const target = viewLevel;
   show('loading');
@@ -3050,6 +3082,8 @@ $('dev-max').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
 });
+$('dev-lv-prev').addEventListener('click', () => { selectLevel(levelIdx - 1, true); toast(`Локация ${clamp(levelIdx, 0, 9) + 1}`); });
+$('dev-lv-next').addEventListener('click', () => { selectLevel(levelIdx + 1, true); toast(`Локация ${clamp(levelIdx + 2, 1, 10)}`); });
 $('dev-worlds').addEventListener('click', () => { save.unlocked = LEVELS.length - 1; persist(); renderLevelBar(); toast('Все миры открыты'); });
 $('dev-zero').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = 0;
@@ -3368,4 +3402,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
