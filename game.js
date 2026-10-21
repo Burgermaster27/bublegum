@@ -38,7 +38,10 @@ function makeLevels(start, tiers, max, legend) {
   for (let lv = 1; lv <= max; lv++) out.push(lv === max ? legend : `${tiers[tierOf(lv)]} ${ROMAN[subOf(lv)]}`);
   return out;
 }
-const priceList = (n, base, g) => Array.from({ length: n }, (_, i) => Math.round(base * Math.pow(g, i) / 10) * 10);
+// Цены подобраны симуляцией прохождения: первые уровни дешёвые, к концу дорожают круто —
+// полная прокачка и все 10 миров занимают около 20 часов игры
+const PRICE_K = 2, PRICE_G = 0.2;
+const priceList = (n, base, g) => Array.from({ length: n }, (_, i) => Math.round(base * PRICE_K * Math.pow(g * (1 + PRICE_G), i) / 10) * 10);
 
 const UPG = {
   sling: { icon: '🪃', name: 'Рогатка', costs: priceList(25, 60, 1.16),
@@ -59,7 +62,7 @@ const UPG = {
   aero: { icon: '🧪', name: 'Обтекаемость', costs: priceList(15, 220, 1.18),
     levels: makeLevels('Коробка', ['Обтекатель', 'Гладкий фюзеляж', 'Аэродинамика PRO'], 15, 'Хромированный болид'),
     desc: 'Снижает сопротивление воздуха — дальше летишь, меньше теряешь скорость.' },
-  gear: { icon: '🛞', name: 'Шасси', costs: [300, 1500, 7500],    // каждое следующее в 5 раз дороже
+  gear: { icon: '🛞', name: 'Шасси', costs: [600, 3000, 15000],    // каждое следующее в 5 раз дороже
     levels: ['Посадка на брюхо', 'Колёса', 'Хромированное шасси', 'Золотое шасси'],
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
 };
@@ -135,10 +138,10 @@ function computeStats(L) {
     levelK: w ? 1.4 : 0,
     turnK: w ? 1.6 : 0,
     align: (w ? 0.42 + wt * 0.26 : 0.06) + (t ? 0.07 + tt * 0.06 : 0),
-    thrust: e ? 4.4 + et * 11 : 0,
-    propVmax: e ? 50 + et * 60 : 0,
+    thrust: e ? 4.4 + et * 12.5 + et * et * 2 : 0,
+    propVmax: e ? 50 + et * 60 + et * et * 25 : 0,
     // Бак растёт быстрее к концу: на максимуме хватает на самый длинный мир с запасом
-    fuel: e ? Math.round((6 + L.fuel * 2 + L.fuel * L.fuel * 0.36) * 10) / 10 : 0,
+    fuel: e ? Math.round((6 + L.fuel * 2 + L.fuel * L.fuel * (64 / 225)) * 10) / 10 : 0,   // 15-й уровень — ровно 100 с
     gear: L.gear > 0,
     rollFr: [0, 2.2, 1.3, 0.75][L.gear],      // сопротивление качению: лучше шасси — дольше пробег
     span: wingSpan(w),
@@ -2991,8 +2994,8 @@ function renderStats() {
     bar('Подъёмная сила', s.liftK > 0 ? 'качество ' + glide : 'нет', s.liftK / 0.036) +
     bar('Устойчивость', save.lv.tail ? ['хорошая', 'отличная', 'идеальная', 'идеальная'][tierOf(save.lv.tail)] : 'слабая', (save.lv.tail + 1) / 16) +
     bar('Управляемость', ['почти нет', 'слабая', 'средняя', 'хорошая', 'отличная', 'превосходная'][Math.round((save.lv.wings / 25 + save.lv.tail / 15) / 2 * 5)], (save.lv.wings / 25 + save.lv.tail / 15) / 2) +
-    bar('Тяга', s.thrust > 0 ? s.thrust.toFixed(1) + ' м/с²' : 'нет двигателя', s.thrust / 15.4) +
-    bar('Топливо', s.fuel > 0 ? s.fuel + ' с' : 'нет', s.fuel / 117) +
+    bar('Тяга', s.thrust > 0 ? s.thrust.toFixed(1) + ' м/с²' : 'нет двигателя', s.thrust / 18.9) +
+    bar('Топливо', s.fuel > 0 ? s.fuel + ' с' : 'нет', s.fuel / 100) +
     bar('Сопротивление', (s.cd0 * 10000).toFixed(1), 1 - (s.cd0 - 0.0005) / 0.0008);
   renderLevelBar();
   $('records').innerHTML = `Рекорд: <b>${save.lvBest[levelIdx] || 0} м</b> из ${FINISH_Z} · Полётов: <b>${save.flights}</b>${save.finishes ? ` · Финишей: <b>${save.finishes}</b>` : ''}`;
@@ -3413,4 +3416,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
