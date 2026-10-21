@@ -2058,14 +2058,10 @@ function setInspect(on) {
   insp.on = on;
   $('hangar').classList.toggle('hidden', on);
   $('inspect').classList.toggle('hidden', !on);
-  // рогатка закрывает самолёт с некоторых ракурсов — на время осмотра прячем её
-  if (slingGroup) slingGroup.visible = !on;
-  for (const b of bands) b.visible = !on;
-  pouch.visible = !on;
   if (on) {
     // начинаем с того ракурса, где камера уже стоит, чтобы не было рывка
     const d = _tmp.copy(camPos).sub(plane.position);
-    insp.dist = clamp(d.length(), 8, 22);
+    insp.dist = camera.aspect < 1 ? 21 : 15;   // издалека, чтобы рогатка с самолётом целиком влезали в кадр
     insp.yaw = Math.atan2(d.x, d.z);
     insp.pitch = clamp(Math.asin(d.y / Math.max(0.001, d.length())), -0.2, 1.3);
   }
@@ -2087,14 +2083,14 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   if (insp.ptrs.size === 2) {                     // щипок — приближение
     const [a, b] = [...insp.ptrs.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (insp.pinch) insp.dist = clamp(insp.dist * insp.pinch / d, 5, 24);
+    if (insp.pinch) insp.dist = clamp(insp.dist * insp.pinch / d, 8, 30);
     insp.pinch = d;
   }
 });
 const inspUp = (e) => { insp.ptrs.delete(e.pointerId); if (insp.ptrs.size < 2) insp.pinch = 0; };
 renderer.domElement.addEventListener('pointerup', inspUp);
 renderer.domElement.addEventListener('pointercancel', inspUp);
-renderer.domElement.addEventListener('wheel', (e) => { if (insp.on) { insp.dist = clamp(insp.dist * (1 + Math.sign(e.deltaY) * 0.1), 5, 24); e.preventDefault(); } }, { passive: false });
+renderer.domElement.addEventListener('wheel', (e) => { if (insp.on) { insp.dist = clamp(insp.dist * (1 + Math.sign(e.deltaY) * 0.1), 8, 30); e.preventDefault(); } }, { passive: false });
 $('insp-back').addEventListener('click', () => setInspect(false));
 // Полоса над мастерской на телефоне принадлежит просмотрщику и касания туда не доходят,
 // поэтому пустая часть шапки «Мастерская» тоже открывает осмотр
@@ -2433,8 +2429,8 @@ const camLook = new V3(), camPos = new V3(), camHeading = new V3(0, 0, 1);
 let orbit = 0;
 function updateCamera(dt) {
   if (mode === 'hangar' && insp.on) {
-    // Осмотр: камера на сфере вокруг самолёта, пользователь крутит её пальцем/мышью
-    const c = plane.position;
+    // Осмотр: самолёт заряжен в рогатку; камера на сфере вокруг них, пользователь крутит её пальцем/мышью
+    const c = _vd.copy(plane.position).lerp(_vb.set(0, launchBase.y + 0.5, 1.8), 0.35);
     const cp = Math.cos(insp.pitch);
     const target = _tmp.set(c.x + Math.sin(insp.yaw) * cp * insp.dist, c.y + Math.sin(insp.pitch) * insp.dist, c.z + Math.cos(insp.yaw) * cp * insp.dist);
     target.y = Math.max(target.y, terrainH(target.x, target.z) + 0.5);
