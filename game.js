@@ -39,8 +39,8 @@ function makeLevels(start, tiers, max, legend) {
   return out;
 }
 // Цены подобраны симуляцией прохождения: первые уровни дешёвые, к концу дорожают круто —
-// полная прокачка и все 10 миров занимают около 20 часов игры
-const PRICE_K = 2, PRICE_G = 0.2;
+// всё прохождение целиком (10 миров + полная прокачка) — около 18 часов игры, не больше 20
+const PRICE_K = 2, PRICE_G = 0.19;
 const priceList = (n, base, g) => Array.from({ length: n }, (_, i) => Math.round(base * PRICE_K * Math.pow(g * (1 + PRICE_G), i) / 10) * 10);
 
 const UPG = {
