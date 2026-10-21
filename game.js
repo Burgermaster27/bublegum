@@ -61,7 +61,7 @@ const UPG_ORDER = ['sling', 'wings', 'tail', 'prop', 'engine', 'fuel', 'aero', '
 
 const SAVE_KEY = 'slingplane-save-v1';
 const defaultSave = () => ({
-  money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'auto', showFps: false,
+  money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
   lv: { sling: 0, wings: 0, tail: 0, prop: 0, engine: 0, fuel: 0, aero: 0, gear: 0 },
 });
 let save = defaultSave();
@@ -69,6 +69,7 @@ try {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { const s = JSON.parse(raw); save = { ...defaultSave(), ...s, lv: { ...defaultSave().lv, ...(s.lv || {}) } }; }
 } catch (e) { /* без сохранений */ }
+if (!['low', 'medium', 'high'].includes(save.quality)) save.quality = 'medium';
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
 
 // Характеристики самолёта, выведенные из уровней прокачки
@@ -1463,7 +1464,7 @@ function enterHangar() {
   rebuildPlane();
   resetRun();
   placeOnSlingshot();
-  show('hangar'); hide('hud'); hide('aim'); hide('result');
+  show('hangar'); hide('hud'); hide('aim'); hide('aim-hint'); hide('result');
   renderShop();
   Sound.update(0, false);
 }
@@ -1473,7 +1474,7 @@ function enterAim() {
   resetRun();
   aim.pull = 0; aim.pulling = false;
   placeOnSlingshot();
-  hide('hangar'); show('aim'); hide('hud');
+  hide('hangar'); hide('settings'); show('aim'); show('aim-hint'); hide('hud');
   updateAimHud();
 }
 function launch() {
@@ -1483,7 +1484,7 @@ function launch() {
   P.vel.copy(_f).multiplyScalar(S.launch * power);
   P.w.set(0, 0, 0);
   mode = 'flight';
-  hide('aim'); show('hud');
+  hide('aim'); hide('aim-hint'); show('hud');
   $('hud-fuel').classList.toggle('hidden', S.thrust <= 0);
   Sound.blip(180, 0.3, 'sawtooth', 0.2);
   aim.pull = 0;
@@ -1605,15 +1606,16 @@ function renderStats() {
     bar('Сопротивление', (s.cd0 * 10000).toFixed(1), 1 - (s.cd0 - 0.0005) / 0.0008);
   $('records').innerHTML = `Рекорд: <b>${save.best} м</b> из ${FINISH_Z} · Полётов: <b>${save.flights}</b>${save.finishes ? ` · Финишей: <b>${save.finishes}</b>` : ''}`;
   $('opt-invert').checked = !!save.invert;
-  $('opt-quality').value = save.quality;
+  document.querySelectorAll('#opt-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === save.quality));
   $('opt-fps').checked = !!save.showFps;
   $('opt-sound').checked = !!save.sound;
 }
 function updateAimHud() {
   $('a-power').style.width = Math.round(aim.pull * 100) + '%';
   $('a-pitch').textContent = Math.round(aim.pitch) + '°';
-  $('a-yaw').textContent = (aim.yaw > 0 ? '→ ' : aim.yaw < 0 ? '← ' : '') + Math.abs(Math.round(aim.yaw)) + '°';
-  $('a-speed').textContent = Math.round(S.launch * (0.25 + 0.75 * aim.pull) * 3.6) + ' км/ч';
+  $('a-yaw').textContent = (aim.yaw > 0.5 ? '→' : aim.yaw < -0.5 ? '←' : '') + Math.abs(Math.round(aim.yaw)) + '°';
+  $('a-speed').textContent = Math.round(S.launch * (0.25 + 0.75 * aim.pull) * 3.6);
+  $('aim-hint').classList.toggle('hidden', aim.pull > 0.02 || drag.id !== null || aim.pulling);
 }
 let warnText = '';
 function updateFlightHud() {
@@ -1627,7 +1629,7 @@ function updateFlightHud() {
   $('h-togo').textContent = P.maxZ < FINISH_Z ? `до финиша ${Math.ceil(FINISH_Z - P.maxZ)} м` : 'финиш!';
   if (S.thrust > 0) {
     $('h-fuel').style.width = (P.fuel / S.fuel * 100) + '%';
-    $('h-fuel-label').innerHTML = P.fuel > 0 ? `Топливо ${P.fuel.toFixed(1)} с — держи ${isTouch ? '«Мотор»' : '<span class="kbd">Пробел</span>'}` : 'Топливо кончилось';
+    $('h-fuel-label').innerHTML = P.fuel > 0 ? `⛽ ${P.fuel.toFixed(1)} с${isTouch ? '' : ' · <span class="kbd">Пробел</span>'}` : '⛽ пусто';
   }
   let w = '';
   if (P.pos.y > THIN_AIR) w = 'Разреженный воздух — крылья и мотор теряют силу';
@@ -1638,11 +1640,15 @@ function updateFlightHud() {
 $('go').addEventListener('click', () => enterAim());
 $('r-ok').addEventListener('click', () => enterHangar());
 $('opt-invert').addEventListener('change', (e) => { save.invert = e.target.checked; persist(); });
-$('opt-quality').addEventListener('change', (e) => {
-  const needReload = (e.target.value === 'high') !== (save.quality === 'high');   // сглаживание меняется только при перезагрузке
-  save.quality = e.target.value; persist();
-  if (needReload) location.reload(); else applyQuality();
-});
+document.querySelectorAll('#opt-quality button').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.q === save.quality) return;
+  const needReload = (b.dataset.q === 'high') !== (save.quality === 'high');   // сглаживание включается только при перезагрузке
+  save.quality = b.dataset.q; persist();
+  if (needReload) location.reload(); else { applyQuality(); renderStats(); }
+}));
+$('open-settings').addEventListener('click', () => { renderStats(); show('settings'); });
+$('set-close').addEventListener('click', () => hide('settings'));
+$('settings').addEventListener('click', (e) => { if (e.target.id === 'settings') hide('settings'); });
 $('opt-fps').addEventListener('change', (e) => { save.showFps = e.target.checked; persist(); $('fps').style.display = save.showFps ? 'block' : 'none'; });
 $('opt-sound').addEventListener('change', (e) => { save.sound = e.target.checked; persist(); Sound.setMuted(!save.sound); });
 // Подтверждение вторым нажатием: в некоторых встроенных браузерах confirm() не работает
@@ -1762,11 +1768,13 @@ function updateCamera(dt) {
     camPos.lerp(target, 1 - Math.exp(-dt * 3));
     camLook.lerp(_tmp2.set(c.x - 2.4, c.y + 0.2, c.z + 0.5), 1 - Math.exp(-dt * 3));
   } else if (mode === 'aim') {
-    aimQuat(_qi);
-    _f.set(0, 0, 1).applyQuaternion(_qi);
-    const target = _tmp.copy(launchBase).addScaledVector(_f, -16).add(_tmp2.set(0, 6.5, 0));
+    // Камера смотрит по курсу прицела, а не по углу вверх — иначе при натяжении она уезжает в небо
+    const yaw = -aim.yaw * Math.PI / 180;
+    _f.set(Math.sin(yaw), 0, Math.cos(yaw));
+    const portrait = camera.aspect < 1;
+    const target = _tmp.copy(launchBase).addScaledVector(_f, portrait ? -19 : -15).add(_tmp2.set(0, portrait ? 8 : 6.5, 0));
     camPos.lerp(target, 1 - Math.exp(-dt * 6));
-    camLook.lerp(_tmp2.copy(launchBase).addScaledVector(_f, 25), 1 - Math.exp(-dt * 6));
+    camLook.lerp(_tmp2.copy(launchBase).addScaledVector(_f, 40).add(_vb.set(0, 6 + aim.pitch * 0.15, 0)), 1 - Math.exp(-dt * 6));
   } else {
     _f.set(0, 0, 1).applyQuaternion(P.q);
     const v = P.vel.length();
@@ -1796,16 +1804,14 @@ function updateCamera(dt) {
 //  Качество графики и счётчик FPS
 // =====================================================================
 
-// auto — как «среднее», но разрешение рендера само подстраивается под FPS
 const QUALITY = {
   high: { scale: Math.min(devicePixelRatio, 2), shadow: 2048, soft: true, tufts: true, far: 1500 },
-  medium: { scale: 1, shadow: 1024, soft: false, tufts: true, far: 1300 },
-  auto: { scale: 1, shadow: 1024, soft: false, tufts: true, far: 1300 },
-  low: { scale: 0.7, shadow: 0, soft: false, tufts: false, far: 1000 },
+  medium: { scale: Math.min(devicePixelRatio, 1.25), shadow: 1024, soft: false, tufts: true, far: 1300 },
+  low: { scale: 0.75, shadow: 0, soft: false, tufts: false, far: 1000 },
 };
 let renderScale = 1;
 function applyQuality() {
-  const q = QUALITY[save.quality] || QUALITY.auto;
+  const q = QUALITY[save.quality] || QUALITY.medium;
   renderScale = q.scale;
   renderer.setPixelRatio(renderScale);
   renderer.shadowMap.enabled = q.shadow > 0;
@@ -1829,12 +1835,6 @@ function updateFps(dt) {
   const el = $('fps');
   el.style.display = save.showFps ? 'block' : 'none';
   el.textContent = `${Math.round(fpsMeter.fps)} FPS · ${Math.round(renderScale * 100)}%`;
-  if (save.quality === 'auto') {
-    let next = renderScale;
-    if (fpsMeter.fps < 45) next = Math.max(0.5, renderScale - 0.1);
-    else if (fpsMeter.fps > 58) next = Math.min(Math.min(devicePixelRatio, 1.5), renderScale + 0.05);
-    if (Math.abs(next - renderScale) > 0.001) { renderScale = next; renderer.setPixelRatio(renderScale); }
-  }
 }
 
 // =====================================================================

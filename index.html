@@ -51,13 +51,31 @@
     75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-24px); } }
 
   /* ---------- aim HUD ---------- */
-  #aim { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); width: min(560px, 92vw);
-    background: var(--panel); border-radius: 14px; padding: 14px 18px; text-align: center; }
-  #aim h3 { margin: 0 0 6px; font-size: 18px; }
-  #aim p { margin: 4px 0; color: var(--muted); font-size: 14px; }
-  .power-track { height: 16px; border-radius: 8px; background: rgba(255,255,255,.14); overflow: hidden; margin: 10px 0 6px; }
+  #aim { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); width: max-content; min-width: 210px;
+    background: var(--panel); border-radius: 999px; padding: 7px 18px 8px; text-align: center; pointer-events: none; }
+  .power-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; margin-top: 5px; }
   .power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #66d17a, #ffd23d, #ff6b5b); }
-  #aim .vals { display: flex; justify-content: center; gap: 22px; font-size: 14px; }
+  #aim .vals { display: flex; justify-content: center; gap: 16px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #aim .vals b { color: var(--text); }
+  #aim-hint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; animation: hint 1.6s ease-in-out infinite; }
+  @keyframes hint { 0%, 100% { transform: translate(-50%, 0); opacity: .9; } 50% { transform: translate(-50%, 10px); opacity: .55; } }
+
+  /* ---------- настройки ---------- */
+  #settings { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 14, 24, .5); z-index: 5; }
+  #settings .box { background: var(--panel); border-radius: 18px; padding: 18px 20px; width: min(420px, 92vw); max-height: 92vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px; }
+  #settings h2 { margin: 0; font-size: 20px; }
+  .srow { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; cursor: pointer; }
+  .srow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .srow input[type=checkbox] { width: 22px; height: 22px; accent-color: #ffcc33; flex: none; }
+  .seg { display: flex; background: rgba(255,255,255,.08); border-radius: 10px; padding: 3px; gap: 2px; flex: none; }
+  .seg button { background: transparent; color: var(--muted); padding: 7px 10px; font-size: 13px; border-radius: 8px; }
+  .seg button.on { background: var(--gold); color: #2a2000; }
+  .sbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ghost { background: rgba(255,255,255,.08); color: var(--muted); padding: 8px 12px; font-size: 13px; }
+  #set-close { background: var(--gold); color: #2a2000; font-size: 16px; padding: 10px; }
+  #open-settings { margin-left: auto; margin-right: 12px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 19px; padding: 0; }
 
   /* ---------- hangar ---------- */
   #hangar { position: fixed; inset: 0; pointer-events: none; }
@@ -97,7 +115,7 @@
   #records b { color: var(--text); }
   #go { position: absolute; left: calc((100vw - min(430px, 48vw) - 14px) / 2); bottom: 26px; transform: translateX(-50%);
     background: linear-gradient(180deg, #ffd84d, #ffae1a); color: #3a2400; font-size: 24px; padding: 14px 44px;
-    border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,.3); }
+    border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,.3); white-space: nowrap; }
   #go:hover { filter: brightness(1.07); }
   .opts { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
   .opts label { cursor: pointer; display: flex; gap: 8px; align-items: center; }
@@ -133,9 +151,8 @@
   #tbtn.dim { opacity: .35; }
   #tquit { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 22px; padding: 7px 12px; background: rgba(18,26,38,.7);
     color: #fff; font-size: 13px; pointer-events: auto; }
-  body.touch #aim { top: 10px; bottom: auto; width: min(480px, 56vw); padding: 8px 12px; }
-  body.touch #aim h3 { font-size: 15px; margin-bottom: 2px; }
-  body.touch #aim p { font-size: 12px; margin: 2px 0; }
+  /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
+  body.touch #hud-stats, body.touch #hud-money { top: 72px; }
   body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; top: 72px; bottom: auto; }
 
   /* телефон в альбомной ориентации */
@@ -167,8 +184,21 @@
   @media (max-width: 760px) {
     #left-panel { display: none; }
     #shop { width: auto; left: 14px; bottom: 96px; }
+    body.touch #shop { top: 72px; }
     #go { left: 50%; bottom: 20px; }
     #hud-help { display: none; }
+    /* вертикальный телефон: компактный HUD */
+    #hud-stats { min-width: 0; padding: 6px 10px; }
+    #hud-stats .row { font-size: 12px; line-height: 1.45; gap: 10px; }
+    #hud-money { font-size: 15px; padding: 6px 10px; }
+    #hud-progress { top: 14px; width: 46vw; padding: 6px 10px; }
+    .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
+    .prog-labels { justify-content: center; }
+    body.touch #hud-fuel { top: 150px; width: 50vw; }
+    #stick { left: max(16px, env(safe-area-inset-left)); transform: none; width: 180px; height: 180px; }
+    #tbtn { width: 108px; height: 108px; }
+    #tquit { left: auto; right: max(18px, env(safe-area-inset-right)); bottom: 146px; }
+    #hud-warn { top: 200px; font-size: 13px; }
   }
 </style>
 <script type="importmap">
@@ -211,13 +241,14 @@
 </div>
 
 <div id="aim" class="hidden">
-  <h3>Натяни рогатку!</h3>
-  <p class="kb-only"><span class="kbd">W</span><span class="kbd">S</span> — угол вверх/вниз, <span class="kbd">A</span><span class="kbd">D</span> — влево/вправо</p>
-  <p class="kb-only">Зажми <span class="kbd">Пробел</span>, чтобы натянуть, и отпусти, или просто потяни мышью</p>
-  <p>Потяни вниз и отпусти, как в Angry Birds: дальше тянешь — сильнее и выше, вбок — поворот</p>
+  <div class="vals">
+    <span title="Угол вверх">∠ <b id="a-pitch">25°</b></span>
+    <span title="Курс">⇄ <b id="a-yaw">0°</b></span>
+    <span title="Скорость запуска"><b id="a-speed">0</b> км/ч</span>
+  </div>
   <div class="power-track"><div class="power-fill" id="a-power"></div></div>
-  <div class="vals"><span>Угол: <b id="a-pitch">25°</b></span><span>Курс: <b id="a-yaw">0°</b></span><span>Скорость: <b id="a-speed">0 км/ч</b></span></div>
 </div>
+<div id="aim-hint" class="hidden">Потяни вниз ↓ и отпусти</div>
 
 <div id="hangar" class="hidden">
   <div id="left-panel">
@@ -225,27 +256,31 @@
     <div class="sub">Доберись до финиша в 3 км, облетая препятствия.</div>
     <div id="stats"></div>
     <div id="records"></div>
-    <div class="opts">
-      <label><input type="checkbox" id="opt-invert"> Инверсия тангажа (W — нос вниз)</label>
-      <label><input type="checkbox" id="opt-sound" checked> Звук</label>
-      <label><input type="checkbox" id="opt-fps"> Показывать FPS</label>
-      <label>Графика:
-        <select id="opt-quality">
-          <option value="auto">Авто (подстраивается)</option>
-          <option value="low">Низкая</option>
-          <option value="medium">Средняя</option>
-          <option value="high">Высокая</option>
-        </select>
-      </label>
-      <button class="reset touch-only" id="tfull">⛶ Во весь экран</button>
-      <button class="reset" id="reset">Сбросить прогресс</button>
-    </div>
   </div>
   <div id="shop">
-    <header><h2>Мастерская</h2><div class="money">🪙 <span id="s-money">0</span></div></header>
+    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money">🪙 <span id="s-money">0</span></div></header>
     <div id="cards"></div>
   </div>
   <button id="go">На старт ▶</button>
+</div>
+
+<div id="settings" class="hidden">
+  <div class="box">
+    <h2>Настройки</h2>
+    <label class="srow" for="opt-invert"><span>Управление как в самолёте<small>Джойстик или W/S: «на себя» — нос вверх</small></span><input type="checkbox" id="opt-invert"></label>
+    <div class="srow"><span>Графика</span>
+      <div class="seg" id="opt-quality">
+        <button data-q="low">Низкая</button><button data-q="medium">Средняя</button><button data-q="high">Высокая</button>
+      </div>
+    </div>
+    <label class="srow" for="opt-sound"><span>Звук</span><input type="checkbox" id="opt-sound" checked></label>
+    <label class="srow" for="opt-fps"><span>Показывать FPS</span><input type="checkbox" id="opt-fps"></label>
+    <div class="sbtns">
+      <button class="ghost touch-only" id="tfull">⛶ Во весь экран</button>
+      <button class="ghost" id="reset">Сбросить прогресс</button>
+    </div>
+    <button id="set-close">Готово</button>
+  </div>
 </div>
 
 <div id="result" class="hidden">
