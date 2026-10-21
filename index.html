@@ -18,11 +18,16 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #9cc9ec; color: var(--text);
     font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; user-select: none; }
-  canvas { display: block; }
+  /* Холст закрывает весь экран, включая зоны под кнопками просмотрщика и вырезом;
+     интерфейс держится внутри безопасной области через --safe */
+  canvas { display: block; position: fixed; inset: 0; }
+  .safe { position: fixed; pointer-events: none;
+    top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px);
+    left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); }
   .hidden { display: none !important; }
 
   /* ---------- flight HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud { pointer-events: none; }
   .hud-box { position: absolute; background: var(--panel); border-radius: 12px; padding: 10px 14px;
     box-shadow: 0 4px 18px rgba(0,0,0,.25); }
   #hud-stats { top: 14px; left: 14px; min-width: 190px; }
@@ -51,13 +56,13 @@
     75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-24px); } }
 
   /* ---------- aim HUD ---------- */
-  #aim { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); width: max-content; min-width: 210px;
+  #aim { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: max-content; min-width: 210px;
     background: var(--panel); border-radius: 999px; padding: 7px 18px 8px; text-align: center; pointer-events: none; }
   .power-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; margin-top: 5px; }
   .power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #66d17a, #ffd23d, #ff6b5b); }
   #aim .vals { display: flex; justify-content: center; gap: 16px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
   #aim .vals b { color: var(--text); }
-  #aim-hint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: #fff;
+  #aim-hint { position: absolute; left: 50%; top: 84px; white-space: nowrap; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: #fff;
     text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; animation: hint 1.6s ease-in-out infinite; }
   @keyframes hint { 0%, 100% { transform: translate(-50%, 0); opacity: .9; } 50% { transform: translate(-50%, 10px); opacity: .55; } }
 
@@ -78,7 +83,7 @@
   #open-settings { margin-left: auto; margin-right: 12px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 19px; padding: 0; }
 
   /* ---------- hangar ---------- */
-  #hangar { position: fixed; inset: 0; pointer-events: none; }
+  #hangar { pointer-events: none; }
   #hangar > * { pointer-events: auto; }
   #shop { position: absolute; top: 14px; right: 14px; bottom: 14px; width: min(430px, 48vw); background: var(--panel);
     border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
@@ -133,7 +138,7 @@
   #result .rec { color: var(--good); font-weight: 700; margin-top: 8px; min-height: 1em; }
   #result button { margin-top: 16px; background: var(--gold); color: #2a2000; font-size: 18px; padding: 11px 30px; }
 
-  #fps { position: fixed; right: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
+  #fps { position: absolute; right: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
     padding: 3px 7px; border-radius: 6px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
   .opts select { background: #223; color: var(--text); border: 1px solid #445; border-radius: 6px; padding: 2px 4px; font-family: inherit; }
   /* ---------- сенсорное управление ---------- */
@@ -141,18 +146,17 @@
   body.touch .touch-only { display: revert; }
   body.touch .kb-only, body.touch #hud-help { display: none !important; }
   canvas, #touch * { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  #touch { position: fixed; inset: 0; pointer-events: none; }
-  #stick { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); width: 200px; height: 200px; border-radius: 50%;
+  #touch { pointer-events: none; }
+  #stick { position: absolute; left: 50%; transform: translateX(-50%); bottom: 16px; width: 200px; height: 200px; border-radius: 50%;
     background: rgba(18, 26, 38, .28); border: 2px solid rgba(255,255,255,.3); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
   #knob { width: 84px; height: 84px; border-radius: 50%; background: rgba(255,255,255,.6); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
-  #tbtn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
+  #tbtn { position: absolute; right: 18px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
     background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.on { background: rgba(255, 140, 30, .95); transform: scale(.94); }
   #tbtn.dim { opacity: .35; }
-  #tquit { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 22px; padding: 7px 12px; background: rgba(18,26,38,.7);
+  #tquit { position: absolute; left: 18px; bottom: 22px; padding: 7px 12px; background: rgba(18,26,38,.7);
     color: #fff; font-size: 13px; pointer-events: auto; }
   /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
-  body.touch #hud-stats, body.touch #hud-money { top: 72px; }
   body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; top: 72px; bottom: auto; }
 
   /* телефон в альбомной ориентации */
@@ -184,7 +188,6 @@
   @media (max-width: 760px) {
     #left-panel { display: none; }
     #shop { width: auto; left: 14px; bottom: 96px; }
-    body.touch #shop { top: 72px; }
     #go { left: 50%; bottom: 20px; }
     #hud-help { display: none; }
     /* вертикальный телефон: компактный HUD */
@@ -195,9 +198,9 @@
     .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
     .prog-labels { justify-content: center; }
     body.touch #hud-fuel { top: 150px; width: 50vw; }
-    #stick { left: max(16px, env(safe-area-inset-left)); transform: none; width: 180px; height: 180px; }
+    #stick { left: 16px; transform: none; width: 180px; height: 180px; }
     #tbtn { width: 108px; height: 108px; }
-    #tquit { left: auto; right: max(18px, env(safe-area-inset-right)); bottom: 146px; }
+    #tquit { left: auto; right: 18px; bottom: 146px; }
     #hud-warn { top: 200px; font-size: 13px; }
   }
 </style>
@@ -208,7 +211,7 @@
 <body>
 <div id="loading">Загрузка...</div>
 
-<div id="hud" class="hidden">
+<div id="hud" class="safe hidden">
   <div id="hud-stats" class="hud-box">
     <div class="row"><span>Скорость</span><b id="h-speed">0 км/ч</b></div>
     <div class="row"><span>Высота</span><b id="h-alt">0 м</b></div>
@@ -232,14 +235,15 @@
   </div>
 </div>
 <div id="toasts"></div>
-<div id="fps"></div>
+<div class="safe"><div id="fps"></div></div>
 
-<div id="touch" class="hidden">
+<div id="touch" class="safe hidden">
   <div id="stick"><div id="knob"></div></div>
   <button id="tbtn">Мотор</button>
   <button id="tquit">✕ Стоп</button>
 </div>
 
+<div class="safe">
 <div id="aim" class="hidden">
   <div class="vals">
     <span title="Угол вверх">∠ <b id="a-pitch">25°</b></span>
@@ -249,8 +253,9 @@
   <div class="power-track"><div class="power-fill" id="a-power"></div></div>
 </div>
 <div id="aim-hint" class="hidden">Потяни вниз ↓ и отпусти</div>
+</div>
 
-<div id="hangar" class="hidden">
+<div id="hangar" class="safe hidden">
   <div id="left-panel">
     <h1>Рогатка-Лёт</h1>
     <div class="sub">Доберись до финиша в 3 км, облетая препятствия.</div>

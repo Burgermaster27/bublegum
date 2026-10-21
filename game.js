@@ -1683,7 +1683,7 @@ addEventListener('keyup', (e) => {
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 // Натяжение как в Angry Birds: тянешь самолёт пальцем или мышью и отпускаешь.
 // Вниз — сильнее и выше, вбок — поворот в противоположную сторону.
-const drag = { id: null, x0: 0, y0: 0 };
+const drag = { id: null, x0: 0, y0: 0, pitch: 25, yaw: 0 };
 function aimFromDrag(dx, dy) {
   const L = Math.min(innerWidth, innerHeight) * 0.38;
   aim.pull = clamp(Math.hypot(dx, dy) / L, 0, 1);
@@ -1694,7 +1694,7 @@ function aimFromDrag(dx, dy) {
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (mode !== 'aim' || drag.id !== null) return;
   Sound.init();
-  drag.id = e.pointerId; drag.x0 = e.clientX; drag.y0 = e.clientY;
+  drag.id = e.pointerId; drag.x0 = e.clientX; drag.y0 = e.clientY; drag.pitch = aim.pitch; drag.yaw = aim.yaw;
   try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* синтетические события */ }
 });
 renderer.domElement.addEventListener('pointermove', (e) => {
@@ -1704,7 +1704,8 @@ const endDrag = (e) => {
   if (e.pointerId !== drag.id) return;
   drag.id = null;
   if (mode !== 'aim') return;
-  if (aim.pull > 0.08) launch(); else aim.pull = 0;
+  if (aim.pull > 0.08) launch();
+  else { aim.pull = 0; aim.pitch = drag.pitch; aim.yaw = drag.yaw; }   // слишком слабо — отмена, угол возвращается
 };
 renderer.domElement.addEventListener('pointerup', endDrag);
 renderer.domElement.addEventListener('pointercancel', endDrag);
@@ -1771,10 +1772,12 @@ function updateCamera(dt) {
     // Камера смотрит по курсу прицела, а не по углу вверх — иначе при натяжении она уезжает в небо
     const yaw = -aim.yaw * Math.PI / 180;
     _f.set(Math.sin(yaw), 0, Math.cos(yaw));
+    // Камера дальше и смотрит чуть вниз, чтобы рогатка была в нижней трети кадра, а не обрезалась краем
     const portrait = camera.aspect < 1;
-    const target = _tmp.copy(launchBase).addScaledVector(_f, portrait ? -19 : -15).add(_tmp2.set(0, portrait ? 8 : 6.5, 0));
+    // При натяжении камера чуть отъезжает, чтобы оттянутый самолёт оставался в кадре
+    const target = _tmp.copy(launchBase).addScaledVector(_f, (portrait ? -27 : -21) - aim.pull * 4).add(_tmp2.set(0, portrait ? 7.5 : 6.5, 0));
     camPos.lerp(target, 1 - Math.exp(-dt * 6));
-    camLook.lerp(_tmp2.copy(launchBase).addScaledVector(_f, 40).add(_vb.set(0, 6 + aim.pitch * 0.15, 0)), 1 - Math.exp(-dt * 6));
+    camLook.lerp(_tmp2.copy(launchBase).addScaledVector(_f, portrait ? 12 : 18).add(_vb.set(0, (portrait ? 6 : 4) + aim.pitch * 0.08 - aim.pull * 3, 0)), 1 - Math.exp(-dt * 6));
   } else {
     _f.set(0, 0, 1).applyQuaternion(P.q);
     const v = P.vel.length();
