@@ -2634,12 +2634,36 @@ function buildTargets(idx) {
         stand.position.set(x, gy, z);
         world.add(stand);
       }
-      targets.push({ grp, body, c, base: c.clone(), r, air, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
+      // Подсветка: мягкое пульсирующее свечение вокруг мишени и значок над ней,
+      // который всегда одного размера на экране и виден издалека, даже сквозь деревья
+      const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); grp.add(halo);
+      const mark = new THREE.Sprite(TARGET_MARK_MAT); mark.position.y = r + 2.2; mark.renderOrder = 10; grp.add(mark);
+      targets.push({ grp, body, c, base: c.clone(), r, air, halo, mark, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
       placed = true;
     }
   }
   resetTargets();
 }
+const glowTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.3, 'rgba(255,255,255,.8)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(cv);
+})();
+const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc94a, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 1 });
+const TARGET_MARK_MAT = new THREE.SpriteMaterial({ map: (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  g.lineJoin = 'round';
+  // «яблочко» со стрелкой вниз, с тёмной обводкой — читается на любом фоне
+  g.fillStyle = '#ff3b30'; g.strokeStyle = '#1b1b1b'; g.lineWidth = 8;
+  g.beginPath(); g.arc(64, 50, 38, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 50, 25, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ff3b30'; g.beginPath(); g.arc(64, 50, 12, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffd23a'; g.beginPath(); g.moveTo(46, 94); g.lineTo(82, 94); g.lineTo(64, 122); g.closePath(); g.fill(); g.stroke();
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})(), sizeAttenuation: false, depthTest: false, depthWrite: false, fog: false, transparent: true });
 function resetTargets() {
   for (const t of targets) { t.dead = false; t.hp = t.maxHp; t.grp.visible = true; t.flash = 0; t.body.scale.setScalar(1); }
 }
@@ -2653,6 +2677,11 @@ function updateTargets(time, dt) {
     } else t.body.rotation.z = Math.sin(time * 1.6 + t.ph) * 0.06;
     if (t.spin) for (const ch of t.body.children) if (ch.userData.spin) ch.rotation.y += dt * 30;
     if (t.flash > 0) { t.flash = Math.max(0, t.flash - dt); t.body.scale.setScalar(1 + t.flash * 1.6); }
+    t.halo.scale.setScalar(t.r * (3.1 + 0.5 * Math.sin(time * 4 + t.ph)));
+    // значок — только в полёте и только для мишеней впереди, чтобы не загромождать экран
+    const dz = t.c.z - P.pos.z;
+    t.mark.visible = mode === 'flight' && dz > 5 && dz < 450;
+    if (t.mark.visible) { const k = 0.065 * (1 + 0.12 * Math.sin(time * 5 + t.ph)); t.mark.scale.set(k, k, 1); t.mark.position.y = t.r + 2.2 + Math.sin(time * 3 + t.ph) * 0.4; }
   }
 }
 const SHARD_GEO = new THREE.TetrahedronGeometry(0.45, 0);
@@ -2677,13 +2706,6 @@ const targetPrize = (i) => 25 + i * 10;
 // --- Снаряды ---
 const bullets = [];
 // Снаряд = светящееся пятно (видно и сзади, когда пуля летит прямо от камеры) + вытянутый след
-const glowTex = (() => {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
-  const g = cv.getContext('2d'), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.3, 'rgba(255,255,255,.8)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(cv);
-})();
 const BULLET_LOOK = [[0xffe066, 0.12, 3, 1.3], [0xff9a2a, 0.22, 2.4, 1.8], [0xff3a3a, 0.13, 7, 1.6], [0x7af0ff, 0.3, 2.4, 2.4]].map(([color, r, len, glowS]) => ({
   geo: new THREE.CylinderGeometry(r, r, len, 6).rotateX(Math.PI / 2),
   mat: new THREE.MeshBasicMaterial({ color, fog: false }),
