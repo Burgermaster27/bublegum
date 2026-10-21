@@ -1156,7 +1156,7 @@ const Sound = {
   update(speed, throttle) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.windGain.gain.setTargetAtTime(clamp(speed / 90, 0, 1) * 0.35, t, 0.1);
+    this.windGain.gain.setTargetAtTime(clamp(speed / 90, 0, 1) * 0.11, t, 0.15);
     this.windFilter.frequency.setTargetAtTime(300 + speed * 12, t, 0.1);
     this.engGain.gain.setTargetAtTime(throttle ? 0.12 : 0, t, 0.05);
     this.eng.frequency.setTargetAtTime(55 + speed * 1.4 + (throttle ? 25 : 0), t, 0.1);
@@ -1167,6 +1167,19 @@ const Sound = {
     o.type = type; o.frequency.setValueAtTime(freq, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + dur);
     g.gain.setValueAtTime(vol, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
     o.connect(g).connect(this.master); o.start(); o.stop(ctx.currentTime + dur);
+  },
+  // Звон монеты в духе Марио: короткая «си», затем звонкая «ми» на октаву выше с затуханием
+  coin() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    for (const [f, start, dur] of [[988, 0, 0.07], [1319, 0.07, 0.38]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(f, t0 + start);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.setValueAtTime(0.09, t0 + start);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      o.connect(g).connect(this.master); o.start(t0 + start); o.stop(t0 + start + dur + 0.02);
+    }
   },
   thud(vol = 0.6, dur = 0.5) {
     if (!this.ctx) return;
@@ -1236,6 +1249,43 @@ function updateSinking(dt) {
     spawnPuff(new V3(P.pos.x + (Math.random() - 0.5) * 2, WATER_Y + 0.1, P.pos.z + (Math.random() - 0.5) * 2), 0xffffff, 0.25 + Math.random() * 0.2, 0.6, new V3(0, 1.2, 0));
   }
   if (Math.floor((t - dt) / 0.7) !== Math.floor(t / 0.7) && t < 2.5) spawnRipple(P.pos);
+}
+// Искры подбора монеты: пара жёлтых звёздочек разлетается в стороны и мерцает, как кольца в Сонике
+const sparkTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 30);
+  grd.addColorStop(0, 'rgba(255,255,230,1)'); grd.addColorStop(0.25, 'rgba(255,230,90,.9)'); grd.addColorStop(1, 'rgba(255,200,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = 'rgba(255,250,200,1)';
+  g.beginPath();
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r = i % 2 ? 6 : 30; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+  g.closePath(); g.fill();
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const sparks = [];
+function spawnSparks(pos) {
+  const n = 3 + Math.floor(Math.random() * 2), a0 = Math.random() * Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color: 0xffd23a, transparent: true, depthWrite: false }));
+    sp.position.copy(pos);
+    const a = a0 + i * Math.PI * 2 / n;
+    sparks.push({ sp, vel: new V3(Math.cos(a) * 7, 3 + Math.sin(a) * 5, (Math.random() - 0.5) * 3), life: 0, max: 0.5 });
+    scene.add(sp);
+  }
+}
+function updateSparks(dt) {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.life += dt;
+    const k = s.life / s.max;
+    s.sp.position.addScaledVector(s.vel, dt);
+    s.vel.multiplyScalar(Math.max(0, 1 - dt * 3));
+    s.sp.scale.setScalar(0.6 * (1 - k * 0.7) * (0.7 + 0.3 * Math.sin(s.life * 40)));
+    s.sp.material.opacity = 1 - k * k;
+    s.sp.material.rotation += dt * 6;
+    if (k >= 1) { scene.remove(s.sp); s.sp.material.dispose(); sparks.splice(i, 1); }
+  }
 }
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -1550,8 +1600,8 @@ function collectStuff() {
       // Монета просто исчезает, оставив несколько искорок
       c.taken = true; c.anim = 1;
       P.coins += 5;
-      Sound.blip(880 + Math.random() * 120, 0.1, 'triangle', 0.18);
-      for (let i = 0; i < 4; i++) spawnPuff(c.pos.clone(), 0xffe680, 0.1, 0.35, new V3((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3));
+      Sound.coin();
+      spawnSparks(c.pos);
     }
   }
   // Кольцо засчитывается, только если сквозь него прошёл весь фюзеляж:
@@ -2113,6 +2163,7 @@ function frame(now) {
 
   updateParticles(dt);
   updateRipples(dt);
+  updateSparks(dt);
   updateCamera(dt);
   renderer.render(scene, camera);
 }
@@ -2134,4 +2185,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
