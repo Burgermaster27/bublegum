@@ -514,7 +514,6 @@ function addPowerLine(z) {
         const cm = new THREE.Mesh(unit, cableMat);
         cm.scale.y = len; cm.position.copy(prev).addScaledVector(d, 0.5); cm.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.normalize());
         statics.add(cm);
-        prims.push({ t: 'seg', a: prev.clone(), b: p.clone(), r: 0.35 });
         prev = p;
       }
     }
@@ -1044,8 +1043,11 @@ function buildPlaneMesh(L) {
     const r0 = L.aero === 3 ? 0.42 : 0.47;
     const pts = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12; const z = -2.2 + t * 4.4; const r = t < 0.15 ? lerp(0.16, r0 * 0.9, t / 0.15) : t > 0.85 ? r0 * (1 - (t - 0.85) / 0.15 * 0.55) : r0 * (0.9 + 0.1 * Math.sin((t - 0.15) / 0.7 * Math.PI)); pts.push(new THREE.Vector2(r, z)); }
+    // Закрываем фюзеляж с обоих концов, иначе сзади видна «дырка» внутрь трубы
+    pts.unshift(new THREE.Vector2(0, -2.2));
+    pts.push(new THREE.Vector2(0, 2.2));
     const lg = new THREE.LatheGeometry(pts, 14).rotateX(Math.PI / 2);
-    g.add(mesh(lg, mP));
+    g.add(mesh(lg, std(paint, { roughness: 0.6, side: THREE.DoubleSide })));
     g.add(mesh(new THREE.BoxGeometry(0.05, 0.16, 3.6), mA, r0 * 0.98, 0, 0, false));
     g.add(mesh(new THREE.BoxGeometry(0.05, 0.16, 3.6), mA, -r0 * 0.98, 0, 0, false));
   }
