@@ -84,8 +84,6 @@
   .ghost { background: rgba(255,255,255,.08); color: var(--muted); padding: 8px 12px; font-size: 13px; }
   /* ---------- осмотр самолёта ---------- */
   #inspect { pointer-events: none; }
-  .insp-hint { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); white-space: nowrap; font-size: 14px; font-weight: 600;
-    color: #fff; background: var(--panel); padding: 8px 14px; border-radius: 999px; }
   #insp-back { position: absolute; top: 14px; right: 14px; pointer-events: auto; background: var(--panel); color: var(--text); font-size: 15px; padding: 10px 16px; }
   #set-title { user-select: none; -webkit-user-select: none; }
   #dev { border: 1px dashed rgba(255, 204, 51, .5); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
@@ -292,7 +290,6 @@
 </div>
 
 <div id="inspect" class="safe hidden">
-  <div class="insp-hint">Крути пальцем · щипок или колесо — приблизить</div>
   <button id="insp-back">✕ В меню</button>
 </div>
 
