@@ -63,9 +63,9 @@ const UPG = {
   aero: { icon: '🧪', name: 'Обтекаемость', costs: priceList(15, 220, 1.18),
     levels: makeLevels('Коробка', ['Обтекатель', 'Гладкий фюзеляж', 'Аэродинамика PRO'], 15, 'Хромированный болид'),
     desc: 'Снижает сопротивление воздуха — дальше летишь, меньше теряешь скорость.' },
-  gear: { icon: '🛞', name: 'Шасси', costs: [300],
-    levels: ['Посадка на брюхо', 'Колёса'],
-    desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом.' },
+  gear: { icon: '🛞', name: 'Шасси', costs: [300, 1500, 7500],    // каждое следующее в 5 раз дороже
+    levels: ['Посадка на брюхо', 'Колёса', 'Хромированное шасси', 'Золотое шасси'],
+    desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
 };
 const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear'];
 
@@ -133,6 +133,7 @@ function computeStats(L) {
     propVmax: e ? 50 + et * 60 : 0,
     fuel: e ? Math.round((6 + L.fuel * 2.4) * 10) / 10 : 0,
     gear: L.gear > 0,
+    rollFr: [0, 2.2, 1.3, 0.75][L.gear],      // сопротивление качению: лучше шасси — дольше пробег
     span: wingSpan(w),
   };
 }
@@ -1410,11 +1411,19 @@ function buildPlaneMesh(L) {
   }
   // --- Шасси ---
   if (L.gear > 0) {
+    // Та же форма, меняются материалы: чёрная сталь → хром с красными дисками → золото с белыми боковинами
+    const G = [null,
+      { strut: mDark, tire: std(0x1a1a1a), hub: std(0x6b6b6b) },
+      { strut: std(0xe6ebf0, { metalness: 0.4, roughness: 0.15 }), tire: std(0x141414), hub: std(0xd0302a, { roughness: 0.3 }) },
+      { strut: std(0xd4a017, { metalness: 0.4, roughness: 0.2 }), tire: std(0xf2f2f2, { roughness: 0.6 }), hub: std(0xffd23a, glow(0xb07800, 0.5)) },
+    ][Math.min(3, L.gear)];
     for (const sx of [-1, 1]) {
-      g.add(mesh(new THREE.BoxGeometry(0.08, 0.6, 0.08), mDark, sx * 0.55, -0.6, 0.9));
-      g.add(mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.16, 12).rotateZ(Math.PI / 2), std(0x1a1a1a), sx * 0.6, -0.92, 0.9));
+      g.add(mesh(new THREE.BoxGeometry(0.08, 0.6, 0.08), G.strut, sx * 0.55, -0.6, 0.9));
+      g.add(mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.16, 12).rotateZ(Math.PI / 2), G.tire, sx * 0.6, -0.92, 0.9));
+      g.add(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.18, 10).rotateZ(Math.PI / 2), G.hub, sx * 0.6, -0.92, 0.9, false));
     }
-    g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10).rotateZ(Math.PI / 2), std(0x1a1a1a), 0, -0.5, -1.8));
+    g.add(mesh(new THREE.BoxGeometry(0.05, 0.3, 0.05), G.strut, 0, -0.4, -1.8));
+    g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10).rotateZ(Math.PI / 2), G.tire, 0, -0.55, -1.8));
   }
   g.userData = { span, spinners, flames, blurs, paint: at === -1 ? 0xb08a5a : paint };
   return g;
@@ -1805,7 +1814,7 @@ function groundContact(dt) {
   // Трение качения / скольжения
   const hv = Math.hypot(P.vel.x, P.vel.z);
   const belly = !S.gear && S.liftK > 0;      // крылья мешают скользить: тормозим резко
-  const fr = (S.gear ? 2.2 : belly ? 20 + hv * 0.9 : 7.5) * dt;
+  const fr = (S.gear ? S.rollFr : belly ? 20 + hv * 0.9 : 7.5) * dt;
   if (hv > 0) { const k = Math.max(0, hv - fr) / hv; P.vel.x *= k; P.vel.z *= k; }
   // Ложимся по склону: «верх» самолёта — нормаль рельефа, нос — по курсу движения
   const heading = Math.atan2(P.vel.x || _f.x, P.vel.z || _f.z);
@@ -2227,7 +2236,8 @@ addEventListener('keydown', (e) => {
   if (mode === 'aim' && e.code === 'Escape') enterHangar();
   if (mode === 'hangar' && e.code === 'Enter') enterAim();
   else if (mode === 'result' && (e.code === 'Enter' || e.code === 'Space')) enterHangar();
-  if (mode === 'flight' && e.code === 'KeyR' && !P.ended) endFlight('quit');
+  if (mode === 'flight' && e.code === 'KeyR' && !P.ended && !paused) endFlight('quit');
+  if (mode === 'flight' && (e.code === 'Escape' || e.code === 'KeyP') && !P.ended) setPaused(!paused);
 });
 addEventListener('keyup', (e) => {
   keys[e.code] = false;
@@ -2296,7 +2306,8 @@ if (isTouch) document.body.classList.add('touch');
 })();
 function updateTouchUi() {
   // Джойстик и кнопки появляются только после пуска, чтобы не мешать натяжению
-  const show = isTouch && mode === 'flight' && !P.ended;
+  const show = isTouch && mode === 'flight' && !P.ended && !paused;
+  $('pause-btn').classList.toggle('hidden', !(mode === 'flight' && !P.ended && !paused));
   $('touch').classList.toggle('hidden', !show);
   $('tbtn').classList.toggle('hidden', !(S.thrust > 0));
   if (!(P.fuel > 0)) touch.btn = false;
@@ -2403,11 +2414,26 @@ function updateFps(dt) {
 // =====================================================================
 
 let last = performance.now(), simTime = 0, puffTimer = 0;
+let paused = false;
+function setPaused(on) {
+  if (on && (mode !== 'flight' || P.ended)) return;
+  paused = on;
+  $('pause').classList.toggle('hidden', !on);
+  for (const k in keys) keys[k] = false;
+  touch.x = touch.y = 0;
+  if (on) Sound.update(0, false);
+}
+$('pause-btn').addEventListener('click', () => setPaused(true));
+$('p-resume').addEventListener('click', () => setPaused(false));
+$('p-end').addEventListener('click', () => { setPaused(false); if (mode === 'flight' && !P.ended) endFlight('quit'); });
+$('p-hangar').addEventListener('click', () => { setPaused(false); enterHangar(); });
+addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 const STEP = 1 / 120;
 let acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // На паузе время стоит: физика, препятствия и частицы замирают, кадр просто перерисовывается
+  const dt = paused ? 0 : Math.min(0.05, (now - last) / 1000);
   last = now;
   simTime += dt;
   updateFps(dt);

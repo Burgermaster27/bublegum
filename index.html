@@ -183,6 +183,14 @@
     #knob { width: 72px; height: 72px; }
     #tbtn { width: 100px; height: 100px; bottom: 14px; }
   }
+  /* ---------- пауза ---------- */
+  #pause-btn { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; pointer-events: auto;
+    background: var(--panel); color: var(--text); font-size: 15px; letter-spacing: -2px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  #pause { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 14, 24, .55); z-index: 6; }
+  #pause .box { background: var(--panel); border-radius: 18px; padding: 20px 22px; width: min(320px, 86vw); display: flex; flex-direction: column; gap: 10px; text-align: center; }
+  #pause h2 { margin: 0 0 4px; font-size: 24px; }
+  #p-resume { background: var(--gold); color: #2a2000; font-size: 18px; padding: 12px; }
+  #pause .ghost { font-size: 15px; padding: 11px; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
     font-size: 22px; color: #123; font-weight: 700; }
 
@@ -194,7 +202,7 @@
     /* вертикальный телефон: компактный HUD */
     #hud-stats { min-width: 0; padding: 6px 10px; }
     #hud-stats .row { font-size: 12px; line-height: 1.45; gap: 10px; }
-    #hud-progress { top: 14px; left: auto; right: 14px; transform: none; width: 42vw; padding: 6px 10px; }
+    #hud-progress { top: 14px; left: auto; right: 66px; transform: none; width: calc(100vw - 66px - 14px - 150px); padding: 6px 10px; }
     .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
     .prog-labels { justify-content: center; }
     #stick { width: 180px; height: 180px; }
@@ -228,7 +236,16 @@
     <kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd> — тангаж<br>
     <kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> — крен и поворот<br>
     <kbd>Q</kbd><kbd>E</kbd> — руль направления<br>
-    <kbd>Пробел</kbd> — двигатель · <kbd>R</kbd> — закончить полёт
+    <kbd>Пробел</kbd> — двигатель · <kbd>Esc</kbd> — пауза · <kbd>R</kbd> — закончить полёт
+  </div>
+</div>
+<div class="safe"><button id="pause-btn" class="hidden" aria-label="Пауза">❚❚</button></div>
+<div id="pause" class="hidden">
+  <div class="box">
+    <h2>Пауза</h2>
+    <button id="p-resume">Продолжить</button>
+    <button id="p-end" class="ghost">Закончить полёт</button>
+    <button id="p-hangar" class="ghost">В мастерскую без награды</button>
   </div>
 </div>
 <div id="toasts"></div>
