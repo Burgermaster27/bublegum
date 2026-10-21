@@ -2280,7 +2280,8 @@ function spawnPuff(pos, color = 0xdddddd, size = 1, life = 1.2, vel = null) {
   const m = new THREE.Mesh(puffGeo, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, transparent: true, opacity: 0.7, flatShading: true, depthWrite: false }));
   m.position.copy(pos); m.scale.setScalar(size);
   scene.add(m);
-  particles.push({ m, vel: vel || new V3((Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5), life, max: life, grow: 1.6, grav: 0 });
+  // скорость копируем: вызывающий код часто передаёт общий временный вектор, который потом перезаписывается
+  particles.push({ m, vel: vel ? vel.clone() : new V3((Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5), life, max: life, grow: 1.6, grav: 0 });
 }
 function spawnDebris(pos, vel, colors) {
   for (let i = 0; i < 26; i++) {
