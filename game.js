@@ -1170,13 +1170,15 @@ function liftCoef(a) {
   return 0.72 * Math.sin(2 * a);
 }
 
+// Сенсорное управление: джойстик слева (тангаж/крен), кнопка справа (двигатель / натяжение)
+const touch = { x: 0, y: 0, btn: false };
 function input() {
   const up = keys.KeyW || keys.ArrowUp, down = keys.KeyS || keys.ArrowDown;
-  let pitch = (up ? 1 : 0) - (down ? 1 : 0);
+  let pitch = clamp((up ? 1 : 0) - (down ? 1 : 0) - touch.y, -1, 1);
   if (save.invert) pitch = -pitch;
-  const roll = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  const roll = clamp((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + touch.x, -1, 1);
   const yaw = (keys.KeyE ? 1 : 0) - (keys.KeyQ ? 1 : 0);
-  const throttle = !!(keys.Space || keys.ShiftLeft || keys.ShiftRight);
+  const throttle = !!(keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.btn);
   return { pitch, roll, yaw, throttle };
 }
 
@@ -1601,7 +1603,7 @@ function updateFlightHud() {
   $('h-togo').textContent = P.maxZ < FINISH_Z ? `до финиша ${Math.ceil(FINISH_Z - P.maxZ)} м` : 'финиш!';
   if (S.thrust > 0) {
     $('h-fuel').style.width = (P.fuel / S.fuel * 100) + '%';
-    $('h-fuel-label').innerHTML = P.fuel > 0 ? `Топливо ${P.fuel.toFixed(1)} с — держи <span class="kbd">Пробел</span>` : 'Топливо кончилось';
+    $('h-fuel-label').innerHTML = P.fuel > 0 ? `Топливо ${P.fuel.toFixed(1)} с — держи ${isTouch ? '«Мотор»' : '<span class="kbd">Пробел</span>'}` : 'Топливо кончилось';
   }
   let w = '';
   if (P.pos.y > THIN_AIR) w = 'Разреженный воздух — крылья и мотор теряют силу';
@@ -1639,8 +1641,54 @@ addEventListener('keyup', (e) => {
   if (mode === 'aim' && e.code === 'Space' && aim.pulling) { aim.pulling = false; launch(); }
 });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-renderer.domElement.addEventListener('pointerdown', () => { if (mode === 'aim') aim.pulling = true; });
-addEventListener('pointerup', () => { if (mode === 'aim' && aim.pulling) { aim.pulling = false; launch(); } });
+renderer.domElement.addEventListener('pointerdown', (e) => { if (mode === 'aim' && e.pointerType === 'mouse') aim.pulling = true; });
+addEventListener('pointerup', (e) => { if (mode === 'aim' && aim.pulling && e.pointerType === 'mouse') { aim.pulling = false; launch(); } });
+
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (isTouch) document.body.classList.add('touch');
+(function setupTouch() {
+  const stick = $('stick'), knob = $('knob'), btn = $('tbtn');
+  let sid = null;
+  const moveStick = (e) => {
+    const r = stick.getBoundingClientRect(), R = r.width / 2;
+    let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R;
+    const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
+    touch.x = Math.abs(dx) < 0.12 ? 0 : dx; touch.y = Math.abs(dy) < 0.12 ? 0 : dy;
+    knob.style.transform = `translate(${dx * R * 0.6}px, ${dy * R * 0.6}px)`;
+  };
+  const endStick = () => { sid = null; touch.x = touch.y = 0; knob.style.transform = ''; };
+  const capture = (el, id) => { try { el.setPointerCapture(id); } catch (err) { /* синтетические события */ } };
+  stick.addEventListener('pointerdown', (e) => { e.preventDefault(); sid = e.pointerId; capture(stick, sid); moveStick(e); });
+  stick.addEventListener('pointermove', (e) => { if (e.pointerId === sid) moveStick(e); });
+  stick.addEventListener('pointerup', endStick);
+  stick.addEventListener('pointercancel', endStick);
+  const press = (e) => {
+    e.preventDefault(); capture(btn, e.pointerId); btn.classList.add('on');
+    Sound.init();
+    if (mode === 'aim') aim.pulling = true; else touch.btn = true;
+  };
+  const release = () => {
+    btn.classList.remove('on'); touch.btn = false;
+    if (mode === 'aim' && aim.pulling) { aim.pulling = false; launch(); }
+  };
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  $('tquit').addEventListener('click', () => { if (mode === 'flight' && !P.ended) endFlight('quit'); });
+  $('tfull').addEventListener('click', async () => {
+    try {
+      if (!document.fullscreenElement) { await document.documentElement.requestFullscreen(); await screen.orientation?.lock?.('landscape'); }
+      else await document.exitFullscreen();
+    } catch (err) { /* не все браузеры умеют */ }
+  });
+})();
+function updateTouchUi() {
+  const show = isTouch && (mode === 'aim' || (mode === 'flight' && !P.ended));
+  $('touch').classList.toggle('hidden', !show);
+  $('tbtn').textContent = mode === 'aim' ? 'Натянуть' : 'Мотор';
+  $('tbtn').classList.toggle('dim', mode === 'flight' && !(S.thrust > 0 && P.fuel > 0));
+  $('tquit').classList.toggle('hidden', mode !== 'flight');
+}
 
 // =====================================================================
 //  Камера
@@ -1745,6 +1793,7 @@ function frame(now) {
   last = now;
   simTime += dt;
   updateFps(dt);
+  updateTouchUi();
 
   for (const m of movers) m.update(simTime, dt);
   updateCoins(simTime);
@@ -1755,6 +1804,8 @@ function frame(now) {
     if (keys.KeyS || keys.ArrowDown) aim.pitch = clamp(aim.pitch - rate * dt, 2, 65);
     if (keys.KeyD || keys.ArrowRight) aim.yaw = clamp(aim.yaw + rate * dt, -30, 30);
     if (keys.KeyA || keys.ArrowLeft) aim.yaw = clamp(aim.yaw - rate * dt, -30, 30);
+    aim.pitch = clamp(aim.pitch - touch.y * rate * dt, 2, 65);
+    aim.yaw = clamp(aim.yaw + touch.x * rate * dt, -30, 30);
     if (aim.pulling) aim.pull = Math.min(1, aim.pull + dt / 1.1);
     placeOnSlingshot();
     updateAimHud();

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Рогатка-Лёт</title>
 <style>
   :root {
@@ -118,6 +118,48 @@
   #fps { position: fixed; right: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
     padding: 3px 7px; border-radius: 6px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
   .opts select { background: #223; color: var(--text); border: 1px solid #445; border-radius: 6px; padding: 2px 4px; font-family: inherit; }
+  /* ---------- сенсорное управление ---------- */
+  .touch-only { display: none; }
+  body.touch .touch-only { display: revert; }
+  body.touch .kb-only, body.touch #hud-help { display: none !important; }
+  canvas, #touch * { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  #touch { position: fixed; inset: 0; pointer-events: none; }
+  #stick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 18px; width: 140px; height: 140px; border-radius: 50%;
+    background: rgba(18, 26, 38, .45); border: 2px solid rgba(255,255,255,.35); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+  #knob { width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.75); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  #tbtn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #tbtn.on { background: rgba(255, 140, 30, .95); transform: scale(.94); }
+  #tbtn.dim { opacity: .35; }
+  #tquit { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: 156px; padding: 7px 12px; background: rgba(18,26,38,.7);
+    color: #fff; font-size: 13px; pointer-events: auto; }
+  body.touch #aim { top: 10px; bottom: auto; width: min(480px, 56vw); padding: 8px 12px; }
+  body.touch #aim h3 { font-size: 15px; margin-bottom: 2px; }
+  body.touch #aim p { font-size: 12px; margin: 2px 0; }
+  body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; bottom: 12px; }
+
+  /* телефон в альбомной ориентации */
+  @media (max-height: 520px) {
+    .hud-box { padding: 6px 10px; }
+    #hud-stats { min-width: 140px; top: 8px; left: 8px; }
+    #hud-stats .row { font-size: 12px; line-height: 1.45; }
+    #hud-money { top: 8px; right: 8px; font-size: 15px; }
+    #hud-progress { top: 8px; width: 40vw; padding: 6px 10px; }
+    #left-panel { top: 8px; left: 8px; bottom: 76px; width: 38vw; padding: 10px 12px; overflow-y: auto; }
+    #left-panel h1 { font-size: 18px; }
+    #left-panel .sub { display: none; }
+    .stat { margin: 3px 0; font-size: 12px; }
+    #shop { top: 8px; right: 8px; bottom: 8px; width: 52vw; }
+    #shop header { padding: 8px 12px; }
+    .card { padding: 8px 10px; }
+    #go { left: calc((48vw - 8px) / 2); bottom: 10px; font-size: 18px; padding: 10px 26px; }
+    #result .box { padding: 12px 18px; }
+    #result h2 { font-size: 22px; }
+    #result button { margin-top: 8px; }
+    #stick { width: 120px; height: 120px; bottom: 12px; }
+    #tbtn { width: 100px; height: 100px; bottom: 14px; }
+    #tquit { bottom: 124px; }
+  }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
     font-size: 22px; color: #123; font-weight: 700; }
 
@@ -161,10 +203,17 @@
 <div id="toasts"></div>
 <div id="fps"></div>
 
+<div id="touch" class="hidden">
+  <div id="stick"><div id="knob"></div></div>
+  <button id="tbtn">Мотор</button>
+  <button id="tquit">✕ Стоп</button>
+</div>
+
 <div id="aim" class="hidden">
   <h3>Натяни рогатку!</h3>
-  <p><span class="kbd">W</span><span class="kbd">S</span> — угол вверх/вниз, <span class="kbd">A</span><span class="kbd">D</span> — влево/вправо</p>
-  <p>Зажми <span class="kbd">Пробел</span> или кнопку мыши, чтобы натянуть, и отпусти для запуска</p>
+  <p class="kb-only"><span class="kbd">W</span><span class="kbd">S</span> — угол вверх/вниз, <span class="kbd">A</span><span class="kbd">D</span> — влево/вправо</p>
+  <p class="kb-only">Зажми <span class="kbd">Пробел</span> или кнопку мыши, чтобы натянуть, и отпусти для запуска</p>
+  <p class="touch-only">Джойстиком слева выбери угол, зажми «Натянуть» справа и отпусти</p>
   <div class="power-track"><div class="power-fill" id="a-power"></div></div>
   <div class="vals"><span>Угол: <b id="a-pitch">25°</b></span><span>Курс: <b id="a-yaw">0°</b></span><span>Скорость: <b id="a-speed">0 км/ч</b></span></div>
 </div>
@@ -187,6 +236,7 @@
           <option value="high">Высокая</option>
         </select>
       </label>
+      <button class="reset touch-only" id="tfull">⛶ Во весь экран</button>
       <button class="reset" id="reset">Сбросить прогресс</button>
     </div>
   </div>
