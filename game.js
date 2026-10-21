@@ -1621,8 +1621,18 @@ $('opt-quality').addEventListener('change', (e) => {
 });
 $('opt-fps').addEventListener('change', (e) => { save.showFps = e.target.checked; persist(); $('fps').style.display = save.showFps ? 'block' : 'none'; });
 $('opt-sound').addEventListener('change', (e) => { save.sound = e.target.checked; persist(); Sound.setMuted(!save.sound); });
+// Подтверждение вторым нажатием: в некоторых встроенных браузерах confirm() не работает
+let resetArmed = 0;
 $('reset').addEventListener('click', () => {
-  if (!confirm('Сбросить весь прогресс и деньги?')) return;
+  const btn = $('reset');
+  if (Date.now() - resetArmed > 4000) {
+    resetArmed = Date.now();
+    btn.textContent = 'Точно сбросить? Нажми ещё раз';
+    setTimeout(() => { if (Date.now() - resetArmed >= 4000) btn.textContent = 'Сбросить прогресс'; }, 4100);
+    return;
+  }
+  resetArmed = 0;
+  btn.textContent = 'Сбросить прогресс';
   save = defaultSave(); persist(); enterHangar();
 });
 
