@@ -1913,7 +1913,7 @@ function collectStuff() {
     if (hit) {
       // Монета просто исчезает, оставив несколько искорок
       c.taken = true; c.anim = 1;
-      P.coins += 5;
+      P.coins += 50;
       Sound.coin();
       spawnSparks(c.pos);
     }
@@ -1937,9 +1937,9 @@ function collectStuff() {
     const ok = r.noseOk && dt < inner;
     r.noseOk = null;
     if (ok) {
-      r.taken = true; P.rings++; P.coins += 25;
+      r.taken = true; P.rings++; P.coins += 100;
       r.mesh.material = std(0x6ef08a, { emissive: 0x1d7a33, roughness: 0.4 });
-      toast('Кольцо! +25'); Sound.blip(660, 0.25, 'sine', 0.25); setTimeout(() => Sound.blip(990, 0.25, 'sine', 0.2), 90);
+      toast('Кольцо! +100'); Sound.blip(660, 0.25, 'sine', 0.25); setTimeout(() => Sound.blip(990, 0.25, 'sine', 0.2), 90);
     }
   }
   P.prevNose.copy(nose); P.prevTail.copy(tail);
