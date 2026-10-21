@@ -32,75 +32,108 @@ const MAX_AIM_PITCH = 45;       // круче рогатка не запуска
 //  Прокачка
 // =====================================================================
 
+// Уровни делятся на ступени по 5 — как эпохи у башен в Clash of Clans:
+// у ступени свой материал и форма, внутри ступени каждый уровень добавляет детали
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+const tierOf = (lv) => (lv <= 0 ? -1 : Math.floor((lv - 1) / 5));
+const subOf = (lv) => (lv <= 0 ? 0 : (lv - 1) % 5 + 1);
+function makeLevels(start, tiers, max, legend) {
+  const out = [start];
+  for (let lv = 1; lv <= max; lv++) out.push(lv === max ? legend : `${tiers[tierOf(lv)]} ${ROMAN[subOf(lv)]}`);
+  return out;
+}
+const priceList = (n, base, g) => Array.from({ length: n }, (_, i) => Math.round(base * Math.pow(g, i) / 10) * 10);
+
 const UPG = {
-  sling: { icon: '🪃', name: 'Рогатка', costs: [80, 180, 400, 800, 1600],
-    levels: ['Ветка с резинкой', 'Тугая резина', 'Двойной жгут', 'Стальная рама', 'Пружинный механизм', 'Катапульта'],
+  sling: { icon: '🪃', name: 'Рогатка', costs: priceList(25, 60, 1.16),
+    levels: makeLevels('Ветка с резинкой', ['Крепкая', 'Окованная', 'Стальная', 'Королевская', 'Мифриловая'], 25, 'Небесная катапульта'),
     desc: 'Скорость, с которой самолёт вылетает из рогатки.' },
-  wings: { icon: '🪽', name: 'Крылья', costs: [120, 550, 1500],
-    levels: ['Нет крыльев', 'Фанерные', 'Деревянные с элеронами', 'Композитные'],
+  wings: { icon: '🪽', name: 'Крылья', costs: priceList(25, 120, 1.14),
+    levels: makeLevels('Нет крыльев', ['Фанерные', 'Биплан', 'Дюралевые', 'Композитные', 'Карбоновые'], 25, 'Крылья феникса'),
     desc: 'Подъёмная сила и управление по крену. Без крыльев самолёт летит как камень.' },
-  tail: { icon: '🛩️', name: 'Хвостовое оперение', costs: [200, 800],
-    levels: ['Нет хвоста', 'Киль и стабилизатор', 'Рули высоты и направления'],
+  tail: { icon: '🛩️', name: 'Хвостовое оперение', costs: priceList(15, 180, 1.2),
+    levels: makeLevels('Нет хвоста', ['Деревянный киль', 'Стальное оперение', 'Двойной киль'], 15, 'Оперение аса'),
     desc: 'Устойчивость и управление по тангажу и курсу. Без хвоста самолёт рыскает и кувыркается.' },
-  prop: { icon: '🌀', name: 'Пропеллер', costs: [400, 1700],
-    levels: ['Нет пропеллера', 'Двухлопастной', 'Трёхлопастной'],
-    desc: 'Даёт тягу и открывает топливный бак и двигатель.' },
-  engine: { icon: '⚙️', name: 'Мощность двигателя', req: 'prop', costs: [300, 750, 1600, 3200],
-    levels: ['Моторчик', 'Форсированный', 'Турбо', 'Гоночный', 'Зверь'],
-    desc: 'Сила тяги и максимальная скорость пропеллера.' },
-  fuel: { icon: '⛽', name: 'Топливный бак', req: 'prop', costs: [250, 600, 1300, 2600],
-    levels: ['Фляжка', 'Канистра', 'Бак', 'Большой бак', 'Цистерна'],
+  engine: { icon: '🌀', name: 'Двигатель', costs: priceList(25, 380, 1.115),
+    levels: makeLevels('Нет двигателя', ['Пропеллер', 'Радиальный мотор', 'Трёхмоторный', 'Импеллеры', 'Реактивный'], 25, 'Ракетный ускоритель'),
+    desc: 'Тяга и максимальная скорость. Первый уровень — пропеллер, он открывает топливо.' },
+  fuel: { icon: '⛽', name: 'Топливный бак', req: 'engine', costs: priceList(10, 200, 1.3),
+    levels: ['Фляжка', 'Канистра', 'Две канистры', 'Бак', 'Бак с насосом', 'Большой бак', 'Подвесной бак', 'Два подвесных бака', 'Крыльевые баки', 'Цистерна', 'Мега-цистерна'],
     desc: 'Сколько секунд может работать двигатель.' },
-  aero: { icon: '🧪', name: 'Обтекаемость', costs: [250, 700, 1700],
-    levels: ['Коробка', 'Обтекатель', 'Гладкий фюзеляж', 'Аэродинамика PRO'],
+  aero: { icon: '🧪', name: 'Обтекаемость', costs: priceList(15, 220, 1.18),
+    levels: makeLevels('Коробка', ['Обтекатель', 'Гладкий фюзеляж', 'Аэродинамика PRO'], 15, 'Хромированный болид'),
     desc: 'Снижает сопротивление воздуха — дальше летишь, меньше теряешь скорость.' },
   gear: { icon: '🛞', name: 'Шасси', costs: [300],
     levels: ['Посадка на брюхо', 'Колёса'],
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом.' },
 };
-const UPG_ORDER = ['sling', 'wings', 'tail', 'prop', 'engine', 'fuel', 'aero', 'gear'];
+const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear'];
 
 const SAVE_KEY = 'slingplane-save-v1';
 const defaultSave = () => ({
-  money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
-  lv: { sling: 0, wings: 0, tail: 0, prop: 0, engine: 0, fuel: 0, aero: 0, gear: 0 },
+  ver: 2, money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
+  lv: { sling: 0, wings: 0, tail: 0, engine: 0, fuel: 0, aero: 0, gear: 0 },
 });
 let save = defaultSave();
 try {
   const raw = localStorage.getItem(SAVE_KEY);
-  if (raw) { const s = JSON.parse(raw); save = { ...defaultSave(), ...s, lv: { ...defaultSave().lv, ...(s.lv || {}) } }; }
+  if (raw) {
+    const s = JSON.parse(raw);
+    if (!s.ver) {
+      // Перевод старой прокачки (короткие шкалы) на новые 15/25 уровней примерно той же силы
+      const o = s.lv || {};
+      const oldThrust = o.prop > 0 ? [0, 4.6, 6.0][o.prop] * [1, 1.3, 1.62, 1.95, 2.35][o.engine || 0] : 0;
+      s.lv = {
+        sling: Math.min(25, (o.sling || 0) * 5),
+        wings: [0, 3, 12, 21][o.wings || 0],
+        tail: [0, 4, 12][o.tail || 0],
+        engine: oldThrust ? clamp(Math.round((oldThrust - 4.4) / 11 * 24) + 1, 1, 25) : 0,
+        fuel: [0, 2, 4, 6, 9][o.fuel || 0],
+        aero: [0, 5, 10, 14][o.aero || 0],
+        gear: o.gear || 0,
+      };
+      s.ver = 2;
+    }
+    save = { ...defaultSave(), ...s, lv: { ...defaultSave().lv, ...(s.lv || {}) } };
+    delete save.lv.prop;
+    for (const k of UPG_ORDER) save.lv[k] = clamp(save.lv[k] | 0, 0, UPG[k].costs.length);
+  }
 } catch (e) { /* без сохранений */ }
 if (!['low', 'medium', 'high'].includes(save.quality)) save.quality = 'medium';
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
 
-// Характеристики самолёта, выведенные из уровней прокачки
+const wingSpan = (lv) => (lv > 0 ? 4.6 + (lv - 1) * 0.12 : 0);
+// Характеристики самолёта плавно растут с уровнем; на максимуме чуть сильнее прежних максимальных
 function computeStats(L) {
-  const hasProp = L.prop > 0;
+  const w = L.wings, wt = w > 0 ? (w - 1) / 24 : 0;
+  const t = L.tail, tt = t > 0 ? (t - 1) / 14 : 0;
+  const e = L.engine, et = e > 0 ? (e - 1) / 24 : 0;
+  const a = L.aero / 15;
   return {
-    launch: [30, 38, 46, 55, 64, 74][L.sling],
-    liftK: [0, 0.026, 0.031, 0.036][L.wings],
-    cd0: 0.0010 * [1, 0.82, 0.66, 0.52][L.aero] + [0, 0.00035, 0.00035, 0.0003][L.wings] + [0, 0.00008, 0.0001][L.tail],
-    sideK: 0.003 + [0, 0.003, 0.004][L.tail],
-    pitchStab: [0.010, 0.060, 0.075][L.tail],
-    yawStab: [0.006, 0.040, 0.050][L.tail],
-    pitchCtrl: [0.0018, 0.010, 0.014][L.tail] + (L.wings > 0 ? 0.0012 : 0),
-    pitchBase: [0.7, 1.5, 2.2][L.tail],
-    yawCtrl: [0.0008, 0.004, 0.006][L.tail],
-    yawBase: [0.35, 0.8, 1.2][L.tail],
-    rollCtrl: [0.0008, 0.013, 0.016, 0.019][L.wings],
-    rollBase: [0.4, 1.5, 2.0, 2.5][L.wings],
-    pitchDamp: [0.05, 0.18, 0.20][L.tail],
-    yawDamp: [0.04, 0.15, 0.18][L.tail],
-    rollDamp: [0.02, 0.25, 0.28, 0.30][L.wings],
-    wobble: [3.2, 0.5, 0.15][L.tail],
-    levelK: L.wings > 0 ? 1.4 : 0,
-    turnK: L.wings > 0 ? 1.6 : 0,
-    align: [0.06, 0.45, 0.55, 0.65][L.wings] + [0, 0.08, 0.12][L.tail],
-    thrust: hasProp ? [0, 4.6, 6.0][L.prop] * [1, 1.3, 1.62, 1.95, 2.35][L.engine] : 0,
-    propVmax: hasProp ? [0, 52, 64][L.prop] + L.engine * 8 : 0,
-    fuel: hasProp ? [6, 10, 15, 21, 28][L.fuel] : 0,
+    launch: 30 + L.sling * 1.8,
+    liftK: w ? 0.025 + wt * 0.013 : 0,
+    cd0: 0.0010 * (1 - a * 0.5) + (w ? 0.00036 - wt * 0.00008 : 0) + (t ? 0.00008 + tt * 0.00003 : 0),
+    sideK: 0.003 + (t ? 0.003 + tt * 0.0015 : 0),
+    pitchStab: t ? 0.055 + tt * 0.025 : 0.010,
+    yawStab: t ? 0.036 + tt * 0.016 : 0.006,
+    pitchCtrl: (t ? 0.009 + tt * 0.006 : 0.0018) + (w ? 0.0012 : 0),
+    pitchBase: t ? 1.4 + tt * 0.9 : 0.7,
+    yawCtrl: t ? 0.0035 + tt * 0.003 : 0.0008,
+    yawBase: t ? 0.75 + tt * 0.5 : 0.35,
+    rollCtrl: w ? 0.012 + wt * 0.008 : 0.0008,
+    rollBase: w ? 1.4 + wt * 1.2 : 0.4,
+    pitchDamp: t ? 0.17 + tt * 0.04 : 0.05,
+    yawDamp: t ? 0.14 + tt * 0.05 : 0.04,
+    rollDamp: w ? 0.24 + wt * 0.07 : 0.02,
+    wobble: t ? 0.55 - tt * 0.45 : 3.2,
+    levelK: w ? 1.4 : 0,
+    turnK: w ? 1.6 : 0,
+    align: (w ? 0.42 + wt * 0.26 : 0.06) + (t ? 0.07 + tt * 0.06 : 0),
+    thrust: e ? 4.4 + et * 11 : 0,
+    propVmax: e ? 50 + et * 60 : 0,
+    fuel: e ? Math.round((6 + L.fuel * 2.4) * 10) / 10 : 0,
     gear: L.gear > 0,
-    span: [0, 5, 6, 7.2][L.wings],
+    span: wingSpan(w),
   };
 }
 let S = computeStats(save.lv);
@@ -992,31 +1025,150 @@ function mergeStatic(root, chunk = 300) {
 //  Рогатка
 // =====================================================================
 
-const SL = { base: new V3(0, 0, 0), tips: [new V3(-2.6, 4.6, 1.8), new V3(2.6, 4.6, 1.8)], rest: new V3(0, 3.6, 0) };
-const bandMat = std(0x3b2a20);
+const SL = { tips: [new V3(-2.6, 4.6, 1.8), new V3(2.6, 4.6, 1.8)], rest: new V3(0, 3.6, 0) };
+const bandMat = new THREE.MeshStandardMaterial({ color: 0x3b2a20, roughness: 0.8 });
 const bandGeo = new THREE.CylinderGeometry(0.11, 0.11, 1, 6);
 const bands = [new THREE.Mesh(bandGeo, bandMat), new THREE.Mesh(bandGeo, bandMat)];
 const pouch = mesh(new THREE.BoxGeometry(1.2, 0.9, 0.4), std(0x5a3a26));
+let bandK = 1, slingGroup = null, slingAnim = null;
+
+// Ступени рогатки: 0 — ветка, 1..5 — эпохи по 5 уровней, 6 — легендарная (25 ур.)
+const glow = (c, k = 0.9) => ({ emissive: c, emissiveIntensity: k });
+const SLING_STYLES = [
+  { wood: [0x8a5a2b], bind: [0x6b4a2b], band: [0x5a3a26], bandR: 0.09, base: 'mound' },
+  { wood: [0x9b6a35], bind: [0xcaa56b], band: [0x3b2a20], bandR: 0.11, base: 'stone' },
+  { wood: [0x6e4220], bind: [0x5d646c, { metalness: 0.36, roughness: 0.4 }], band: [0x8b1e1e], bandR: 0.13, base: 'steps' },
+  { wood: [0xc3ccd6, { metalness: 0.36, roughness: 0.35 }], bind: [0x3d434a, { metalness: 0.36, roughness: 0.4 }], band: [0x1c1c1c], bandR: 0.15, base: 'steel' },
+  { wood: [0x5a2f14], bind: [0xd4a017, { metalness: 0.36, roughness: 0.25 }], band: [0xb3122e], bandR: 0.16, base: 'marble' },
+  { wood: [0xbfe3f5, { metalness: 0.36, roughness: 0.25 }], bind: [0x4fd2ff, glow(0x1a8fd0)], band: [0x2fd0ff, glow(0x0f8fd0)], bandR: 0.17, base: 'rune' },
+  { wood: [0x2a1846, { metalness: 0.36, roughness: 0.3 }], bind: [0xff6bff, glow(0xc030c0)], band: [0xff4fd8, glow(0xc02090, 1.2)], bandR: 0.19, base: 'rune' },
+];
+const matOf = (spec) => std(spec[0], spec[1] || {});
+const orient = (m, dir) => { m.quaternion.setFromUnitVectors(new V3(0, 1, 0), dir.clone().normalize()); return m; };
 function buildSlingshot() {
-  const wood = std(0x8a5a2b);
+  if (slingGroup) scene.remove(slingGroup);
+  slingAnimParts.length = 0;
+  const lv = save.lv.sling;
+  const ti = lv === 0 ? 0 : lv >= 25 ? 6 : tierOf(lv) + 1;
+  const sub = lv === 0 ? 1 : lv >= 25 ? 5 : subOf(lv);
+  const st = SLING_STYLES[ti];
+  const k = 1 + lv * 0.016;                         // с каждым уровнем рогатка подрастает
   const g = new THREE.Group();
-  const stem = mesh(new THREE.CylinderGeometry(0.55, 0.75, 2.6, 8), wood, 0, 1.3, 1.8); g.add(stem);
-  for (const sx of [-1, 1]) {
-    const a = new V3(0, 2.5, 1.8), b = new V3(sx * 2.6, 4.6, 1.8);
-    const d = b.clone().sub(a);
-    const arm = mesh(new THREE.CylinderGeometry(0.4, 0.5, d.length(), 8), wood);
-    arm.position.copy(a).addScaledVector(d, 0.5); arm.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.normalize());
-    g.add(arm);
-    g.add(mesh(new THREE.SphereGeometry(0.45, 8, 6), wood, b.x, b.y, b.z));
+  g.position.set(0, terrainH(0, 0), 0);
+  const mWood = matOf(st.wood), mBind = matOf(st.bind), Z = 1.8;
+  const armR = (0.3 + ti * 0.04) * k;
+
+  // Основание
+  const stone = std(0x8c8c8c), dark = std(0x5c5f63);
+  if (st.base === 'mound') g.add(mesh(new THREE.ConeGeometry(2.2, 0.7, 9), std(0x6b5030), 0, 0.2, Z));
+  if (st.base === 'stone') g.add(mesh(jitter(new THREE.CylinderGeometry(3.3, 3.8, 0.6, 10), 0.25, 7), std(0x7c7c7c), 0, 0.2, Z));
+  if (st.base === 'steps') {
+    g.add(mesh(new THREE.CylinderGeometry(3.6, 4.0, 0.5, 12), stone, 0, 0.15, Z));
+    g.add(mesh(new THREE.CylinderGeometry(2.8, 3.1, 0.45, 12), dark, 0, 0.6, Z));
+    for (let i = 0; i < 6 + sub * 2; i++) { const a = i / (6 + sub * 2) * Math.PI * 2; g.add(mesh(new THREE.SphereGeometry(0.13, 6, 4), mBind, Math.cos(a) * 2.95, 0.85, Z + Math.sin(a) * 2.95)); }
   }
-  g.add(mesh(new THREE.CylinderGeometry(3.4, 3.8, 0.6, 10), std(0x7c7c7c), 0, 0.2, 1.8));
-  statics.add(g);
-  for (const b of bands) { b.castShadow = true; scene.add(b); }
-  scene.add(pouch);
+  if (st.base === 'steel') {
+    g.add(mesh(new THREE.CylinderGeometry(3.7, 4.1, 0.8, 8), std(0x6c757d, { metalness: 0.36, roughness: 0.4 }), 0, 0.25, Z));
+    for (let i = 0; i < 8 + sub * 2; i++) { const a = i / (8 + sub * 2) * Math.PI * 2; g.add(mesh(new THREE.SphereGeometry(0.12, 6, 4), mBind, Math.cos(a) * 3.55, 0.68, Z + Math.sin(a) * 3.55)); }
+    // шестерня натяжного механизма
+    const gear = new THREE.Group();
+    gear.add(mesh(new THREE.TorusGeometry(0.9, 0.18, 6, 16), mBind));
+    for (let i = 0; i < 10; i++) { const t = mesh(new THREE.BoxGeometry(0.28, 0.35, 0.3), mBind); const a = i / 10 * Math.PI * 2; t.position.set(Math.cos(a) * 1.1, Math.sin(a) * 1.1, 0); t.rotation.z = a; gear.add(t); }
+    gear.position.set(1.6, 1.2, Z + 0.9); g.add(gear);
+    slingAnimParts.push({ obj: gear, spin: 0.6 });
+  }
+  if (st.base === 'marble') {
+    g.add(mesh(new THREE.CylinderGeometry(3.8, 4.2, 0.5, 16), std(0xeeeae0, { roughness: 0.35 }), 0, 0.15, Z));
+    g.add(mesh(new THREE.CylinderGeometry(3.0, 3.3, 0.45, 16), std(0xf6f2e8, { roughness: 0.35 }), 0, 0.6, Z));
+    for (const [r, y] of [[4.0, 0.42], [3.15, 0.84]]) g.add(mesh(new THREE.TorusGeometry(r, 0.07, 6, 40).rotateX(Math.PI / 2), mBind, 0, y, Z));
+  }
+  if (st.base === 'rune') {
+    g.add(mesh(new THREE.CylinderGeometry(3.8, 4.3, 0.7, 10), std(0x2c3340, { roughness: 0.6 }), 0, 0.2, Z));
+    g.add(mesh(new THREE.TorusGeometry(3.3, 0.09, 6, 48).rotateX(Math.PI / 2), mBind, 0, 0.58, Z));
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; const r = mesh(new THREE.BoxGeometry(0.35, 0.06, 0.18), mBind, Math.cos(a) * 3.7, 0.56, Z + Math.sin(a) * 3.7); r.rotation.y = -a; g.add(r); }
+  }
+
+  // Ствол и рога
+  const stemH = 2.6 * k;
+  g.add(mesh(new THREE.CylinderGeometry(armR * 1.3, armR * 1.75, stemH, 8), mWood, 0, stemH / 2, Z));
+  const tips = [];
+  for (const sx of [-1, 1]) {
+    const a = new V3(0, 2.5 * k, Z), b = new V3(sx * 2.6 * k, 4.6 * k, Z);
+    const d = b.clone().sub(a);
+    const arm = orient(mesh(new THREE.CylinderGeometry(armR, armR * 1.2, d.length(), 8), mWood), d);
+    arm.position.copy(a).addScaledVector(d, 0.5); g.add(arm);
+    g.add(mesh(new THREE.SphereGeometry(armR * 1.2, 10, 8), mBind, b.x, b.y, b.z));
+    // обмотки/оковка: на каждом уровне ступени — на одну больше
+    for (let i = 0; i < sub; i++) {
+      const ring = mesh(new THREE.TorusGeometry(armR * 1.12, 0.07 * k, 6, 14), mBind);
+      ring.position.copy(a).lerp(b, 0.2 + i * 0.14);
+      ring.quaternion.setFromUnitVectors(new V3(0, 0, 1), d.clone().normalize());
+      g.add(ring);
+    }
+    if (sub >= 3 || ti >= 4) {               // шипы на рогах
+      for (let i = 0; i < (ti >= 4 ? 3 : 1); i++) {
+        const sp = mesh(new THREE.ConeGeometry(armR * 0.45, armR * 2.2, 6), mBind);
+        const dir = new V3(sx * (0.4 + i * 0.3), 1, (i - 1) * 0.5);
+        orient(sp, dir); sp.position.copy(b).addScaledVector(dir.normalize(), armR * 1.6); g.add(sp);
+      }
+    }
+    if (sub >= 5 || ti >= 5) {               // флажки на рогах
+      const pole = mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 5), std(0x3a3a3a), b.x, b.y + 1.4, b.z); g.add(pole);
+      const flag = mesh(new THREE.BoxGeometry(0.05, 0.7, 1.1), matOf(st.band), b.x, b.y + 2.1, b.z - 0.55, false); g.add(flag);
+      slingAnimParts.push({ obj: flag, wave: sx });
+    }
+    if (ti >= 5) {                            // светящиеся сферы над рогами
+      const orb = mesh(new THREE.IcosahedronGeometry(0.32 * k, 1), mBind, b.x, b.y + 0.9, b.z, false); g.add(orb);
+      slingAnimParts.push({ obj: orb, bob: b.y + 0.9 });
+    }
+    tips.push(new V3(b.x, b.y, b.z));
+  }
+  if (sub >= 2) for (let i = 0; i < sub * 2; i++) {      // заклёпки на стволе
+    const a = i / (sub * 2) * Math.PI * 2;
+    g.add(mesh(new THREE.SphereGeometry(0.09 * k, 6, 4), mBind, Math.cos(a) * armR * 1.45, stemH * 0.55, Z + Math.sin(a) * armR * 1.45));
+  }
+  if (sub >= 4 || ti >= 4) {                              // герб на стволе
+    const sh = mesh(new THREE.CylinderGeometry(0.45 * k, 0.45 * k, 0.1, 6).rotateX(Math.PI / 2), mBind, 0, stemH * 0.6, Z - armR * 1.6);
+    g.add(sh);
+    g.add(mesh(new THREE.OctahedronGeometry(0.18 * k), matOf(st.band), 0, stemH * 0.6, Z - armR * 1.6 - 0.1));
+  }
+  if (ti >= 4) {                                          // корона в развилке
+    const crown = new THREE.Group();
+    crown.add(mesh(new THREE.TorusGeometry(0.55 * k, 0.09, 6, 16).rotateX(Math.PI / 2), mBind));
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; crown.add(mesh(new THREE.ConeGeometry(0.12, 0.45, 5), mBind, Math.cos(a) * 0.55 * k, 0.25, Math.sin(a) * 0.55 * k)); }
+    for (let i = 0; i < sub; i++) { const a = i / sub * Math.PI * 2 + 0.5; crown.add(mesh(new THREE.OctahedronGeometry(0.11), std(0xe0115f, glow(0x800830, 0.6)), Math.cos(a) * 0.62 * k, 0.05, Math.sin(a) * 0.62 * k)); }
+    crown.position.set(0, 2.55 * k, Z); g.add(crown);
+  }
+  if (ti === 6) {                                         // легенда: кристаллы на орбите
+    for (let i = 0; i < 3; i++) {
+      const c = mesh(new THREE.OctahedronGeometry(0.45, 0), std(0xff9bff, glow(0xc040c0, 1.1)), 0, 0, 0, false);
+      g.add(c); slingAnimParts.push({ obj: c, orbit: i * Math.PI * 2 / 3, cy: 3.4 * k, cz: Z });
+    }
+  }
+  scene.add(g);
+  slingGroup = g;
+  SL.tips = tips;
+  SL.rest.y = 3.6 + (k - 1) * 3.2;
+  bandMat.color.set(st.band[0]);
+  bandMat.emissive.set(st.band[1]?.emissive ?? 0x000000);
+  bandMat.emissiveIntensity = st.band[1]?.emissiveIntensity ?? 1;
+  bandK = st.bandR / 0.11;
+  for (const b of bands) { b.castShadow = true; if (!b.parent) scene.add(b); }
+  if (!pouch.parent) scene.add(pouch);
+  pouch.material = matOf(ti >= 4 ? st.bind : [0x5a3a26]);
+}
+const slingAnimParts = [];
+function animateSlingshot(t) {
+  for (const p of slingAnimParts) {
+    if (p.spin) p.obj.rotation.z = t * p.spin;
+    if (p.wave) p.obj.rotation.y = Math.sin(t * 3 + p.wave) * 0.25;
+    if (p.bob) { p.obj.position.y = p.bob + Math.sin(t * 2) * 0.15; p.obj.rotation.y = t; }
+    if (p.orbit !== undefined) { const a = t * 0.8 + p.orbit; p.obj.position.set(Math.cos(a) * 1.6, p.cy + Math.sin(t * 1.7 + p.orbit) * 0.3, p.cz + Math.sin(a) * 1.6); p.obj.rotation.set(t, t * 1.3, 0); }
+  }
 }
 function setBand(m, a, b) {
   const d = b.clone().sub(a);
-  m.scale.set(1, d.length(), 1);
+  m.scale.set(bandK, d.length(), bandK);
   m.position.copy(a).addScaledVector(d, 0.5);
   m.quaternion.setFromUnitVectors(_yAxis, d.normalize());
 }
@@ -1025,92 +1177,238 @@ function setBand(m, a, b) {
 //  Модель самолёта
 // =====================================================================
 
-let plane = null, propGroup = null;
+let plane = null;
+// Зеркалим геометрию по X с правильным порядком вершин (иначе грани вывернутся)
+function mirrorX(geo) {
+  geo.scale(-1, 1, 1);
+  const idx = geo.index;
+  if (idx) for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i); idx.setX(i, idx.getX(i + 2)); idx.setX(i + 2, a); }
+  geo.computeVertexNormals();
+  return geo;
+}
+// Половина крыла от корня (x=0) до законцовки (x=span): сужение и стреловидность
+function wingGeo(span, chord, taper, sweep, thick, sx) {
+  const g = new THREE.BoxGeometry(span, thick, chord, 6, 1, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i) + span / 2, k = x / span;
+    p.setX(i, x); p.setZ(i, p.getZ(i) * (1 - (1 - taper) * k) - sweep * k);
+    p.setY(i, p.getY(i) * (1 - 0.4 * k));
+  }
+  g.computeVertexNormals();
+  return sx < 0 ? mirrorX(g) : g;
+}
+const PAINTS = [0xb08a5a, 0xc0392b, 0xd35400, 0xe67e22, 0xf1c40f, 0x27ae60, 0x16a085, 0x2980b9, 0x2e86de, 0x8e44ad, 0x34495e, 0xe74c3c, 0x1abc9c, 0x2c3e50, 0xf5f6f8, 0xdfe6ee];
+const ACCENTS = [0x7f8c8d, 0xf5f6f8, 0xf5f6f8, 0x2c3e50, 0x2c3e50, 0xf1c40f, 0xf5f6f8, 0xf1c40f, 0xf5f6f8, 0xf1c40f, 0xe67e22, 0x2c3e50, 0x2c3e50, 0xe74c3c, 0xe74c3c, 0xd4a017];
+const NAV_L = () => std(0xff3030, glow(0xff2020, 1.2)), NAV_R = () => std(0x30ff60, glow(0x20ff40, 1.2));
+
 function buildPlaneMesh(L) {
   const g = new THREE.Group();
-  const paint = [0xc0392b, 0xe67e22, 0x2e86de, 0xf2f4f7][L.aero];
-  const accent = [0x7f8c8d, 0x2c3e50, 0xf1c40f, 0xe74c3c][L.aero];
-  const mP = std(paint, { roughness: 0.6 }), mA = std(accent, { roughness: 0.6 }), mDark = std(0x2b2b2b);
-  const mGlass = new THREE.MeshStandardMaterial({ color: 0x9fd3ff, metalness: 0.3, roughness: 0.15, transparent: true, opacity: 0.85 });
+  const spinners = [], flames = [], blurs = [];
+  const aero = L.aero, at = aero === 0 ? -1 : aero >= 15 ? 3 : tierOf(aero), asub = subOf(aero);
+  const chrome = aero >= 15;
+  const paint = PAINTS[aero], accent = ACCENTS[aero];
+  const mP = chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15 }) : std(paint, { roughness: 0.55 });
+  const mA = chrome ? std(0xd4a017, { metalness: 0.36, roughness: 0.2 }) : std(accent, { roughness: 0.5 });
+  const mDark = std(0x2b2b2b), mMetal = std(0x9aa3ad, { metalness: 0.36, roughness: 0.35 });
+  const mGlass = new THREE.MeshStandardMaterial({ color: 0x9fd3ff, metalness: 0.24, roughness: 0.15, transparent: true, opacity: 0.85 });
 
-  if (L.aero === 0) {
+  // --- Фюзеляж (обтекаемость) ---
+  let bodyR = 0.45;
+  if (at === -1) {
     g.add(mesh(new THREE.BoxGeometry(0.9, 0.9, 4), std(0xb08a5a)));
     g.add(mesh(new THREE.BoxGeometry(0.92, 0.1, 4.02), std(0x8c6a40), 0, 0.2, 0));
-  } else if (L.aero === 1) {
+  } else if (at === 0) {
     g.add(mesh(new THREE.BoxGeometry(0.85, 0.85, 3.5), mP, 0, 0, -0.2));
     g.add(mesh(new THREE.CylinderGeometry(0.2, 0.6, 0.9, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4), mP, 0, 0, 1.95));
+    for (let i = 0; i < asub - 1; i++) g.add(mesh(new THREE.BoxGeometry(0.08, 0.02, 3.4), mA, (i - (asub - 2) / 2) * 0.16, 0.43, -0.2, false));
   } else {
-    const r0 = L.aero === 3 ? 0.42 : 0.47;
-    const pts = [];
+    bodyR = at === 1 ? 0.47 : 0.42;
+    const r0 = bodyR, pts = [new THREE.Vector2(0, -2.2)];
     for (let i = 0; i <= 12; i++) { const t = i / 12; const z = -2.2 + t * 4.4; const r = t < 0.15 ? lerp(0.16, r0 * 0.9, t / 0.15) : t > 0.85 ? r0 * (1 - (t - 0.85) / 0.15 * 0.55) : r0 * (0.9 + 0.1 * Math.sin((t - 0.15) / 0.7 * Math.PI)); pts.push(new THREE.Vector2(r, z)); }
-    // Закрываем фюзеляж с обоих концов, иначе сзади видна «дырка» внутрь трубы
-    pts.unshift(new THREE.Vector2(0, -2.2));
     pts.push(new THREE.Vector2(0, 2.2));
-    const lg = new THREE.LatheGeometry(pts, 14).rotateX(Math.PI / 2);
-    g.add(mesh(lg, std(paint, { roughness: 0.6, side: THREE.DoubleSide })));
-    g.add(mesh(new THREE.BoxGeometry(0.05, 0.16, 3.6), mA, r0 * 0.98, 0, 0, false));
-    g.add(mesh(new THREE.BoxGeometry(0.05, 0.16, 3.6), mA, -r0 * 0.98, 0, 0, false));
+    g.add(mesh(new THREE.LatheGeometry(pts, 16).rotateX(Math.PI / 2), chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15, side: THREE.DoubleSide }) : std(paint, { roughness: 0.55, side: THREE.DoubleSide })));
+    const n = at === 3 ? 3 : asub;                        // гоночные полосы сверху
+    for (let i = 0; i < n; i++) g.add(mesh(new THREE.BoxGeometry(0.07, 0.03, 3.4), mA, (i - (n - 1) / 2) * 0.12, r0 * 0.98, 0, false));
+    for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.04, 0.12, 3.4), mA, sx * r0 * 0.99, 0, 0, false));
+    if (asub >= 3 || at >= 2) g.add(mesh(new THREE.ConeGeometry(0.2, 0.5, 10).rotateX(-Math.PI / 2), mA, 0, 0, -2.35));
+    if (asub >= 5 || at >= 2) for (const sx of [-1, 1]) {   // опознавательные круги
+      g.add(mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 16).rotateZ(Math.PI / 2), std(0xf5f6f8), sx * r0 * 0.97, 0.02, -0.9, false));
+      g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 16).rotateZ(Math.PI / 2), mA, sx * r0 * 0.98, 0.02, -0.9, false));
+    }
+    if (at >= 2) g.add(mesh(new THREE.BoxGeometry(0.16, 0.18, 1.6), mP, 0, r0 * 0.95, -1.1));   // гаргрот за кабиной
   }
-  const cock = mesh(new THREE.SphereGeometry(0.4, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mGlass, 0, 0.36, 0.35);
-  cock.scale.set(1, 0.9, 1.7);
+  const cock = mesh(new THREE.SphereGeometry(0.4, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mGlass, 0, bodyR * 0.8, 0.35);
+  cock.scale.set(1, 0.9, at >= 2 ? 2.1 : 1.7);
   g.add(cock);
+  if (at >= 1) g.add(mesh(new THREE.TorusGeometry(0.4, 0.035, 5, 16, Math.PI).rotateY(Math.PI / 2), mA, 0, bodyR * 0.8, 0.35, false));
 
-  let span = 0;
-  if (L.wings > 0) {
-    span = [0, 5, 6, 7.2][L.wings];
-    const chord = [0, 1.35, 1.25, 1.15][L.wings];
-    const mW = [null, std(0xd9bd8c), std(0xa8743e), std(0xf5f6f8, { roughness: 0.4 })][L.wings];
+  // --- Крылья ---
+  const W = L.wings, wt = W === 0 ? -1 : W >= 25 ? 5 : tierOf(W), wsub = W >= 25 ? 5 : subOf(W);
+  const span = wingSpan(W), half = span / 2;
+  const wingAt = new V3(0, -0.2, 0.35);
+  // базовая плоскость крыла: материал, сужение, стреловидность
+  const WS = [
+    { mat: std(0xd9bd8c), chord: 1.35, taper: 1, sweep: 0, thick: 0.12, dih: 0.05 },
+    { mat: std(0xa8743e), chord: 1.2, taper: 1, sweep: 0, thick: 0.1, dih: 0.03 },
+    { mat: std(0xc9d1d9, { metalness: 0.36, roughness: 0.35 }), chord: 1.3, taper: 0.7, sweep: 0.15, thick: 0.12, dih: 0.06 },
+    { mat: std(0xf5f6f8, { roughness: 0.35 }), chord: 1.3, taper: 0.6, sweep: 0.3, thick: 0.13, dih: 0.07 },
+    { mat: std(0x1d1f24, { metalness: 0.32, roughness: 0.4 }), chord: 1.35, taper: 0.5, sweep: 0.5, thick: 0.13, dih: 0.06 },
+    { mat: std(0xff7a1a, glow(0x802000, 0.6)), chord: 1.35, taper: 0.55, sweep: 0.45, thick: 0.13, dih: 0.08 },
+  ][Math.max(0, wt)];
+  const chordAt = (k) => WS.chord * (1 - (1 - WS.taper) * k), zAt = (k) => -WS.sweep * k;
+  if (W > 0) {
     for (const sx of [-1, 1]) {
-      const half = new THREE.Group();
-      const geo = new THREE.BoxGeometry(span / 2, 0.12, chord);
-      if (L.wings >= 2) { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) if (p.getX(i) > 0) { p.setZ(i, p.getZ(i) * 0.6 - 0.15); } geo.computeVertexNormals(); }
-      geo.translate(span / 4, 0, 0);
-      half.add(mesh(geo, mW));
-      if (L.wings >= 2) half.add(mesh(new THREE.BoxGeometry(span * 0.18, 0.13, 0.28), mA, span * 0.33, 0, -chord * 0.42 + 0.05));
-      const tip = mesh(new THREE.BoxGeometry(0.2, 0.16, chord * (L.wings >= 2 ? 0.6 : 1)), mA, span / 2, 0, L.wings >= 2 ? -0.15 : 0); half.add(tip);
-      half.rotation.y = sx > 0 ? 0 : Math.PI;
-      half.rotation.z = sx * 0.06;
-      half.position.set(0, -0.2, 0.35);
-      g.add(half);
+      const hw = new THREE.Group();
+      hw.position.copy(wingAt); hw.rotation.z = sx * WS.dih;
+      const X = (k) => sx * k * half;
+      hw.add(mesh(wingGeo(half, WS.chord, WS.taper, WS.sweep, WS.thick, sx), WS.mat));
+      if (wt === 0) {                                     // фанера: окрашенные полосы
+        for (let i = 0; i < wsub - 1; i++) { const k = 0.3 + i * 0.15; hw.add(mesh(new THREE.BoxGeometry(0.14, WS.thick + 0.01, chordAt(k) + 0.01), std(0xc0392b), X(k), 0, zAt(k), false)); }
+        hw.add(mesh(new THREE.BoxGeometry(0.06, 0.62, 0.06), mDark, X(0.32), 0.3, 0));
+      }
+      if (wt === 1) {                                     // биплан: верхнее крыло и стойки
+        const up = mesh(wingGeo(half * 1.05, WS.chord, 1, 0, WS.thick, sx), WS.mat, 0, 0.95, 0.15); hw.add(up);
+        const struts = wsub >= 3 ? [0.35, 0.75] : [0.6];
+        for (const k of struts) for (const dz of [-0.35, 0.35]) hw.add(mesh(new THREE.BoxGeometry(0.06, 0.95, 0.06), mDark, X(k), 0.47, dz + 0.07));
+        hw.add(mesh(new THREE.BoxGeometry(0.22, WS.thick + 0.02, WS.chord + 0.02), std(0xc0392b), X(1) - sx * 0.1, 0, 0, false));
+        hw.add(mesh(new THREE.BoxGeometry(0.22, WS.thick + 0.02, WS.chord + 0.02), std(0xc0392b), X(1.05) - sx * 0.1, 0.95, 0.15, false));
+        if (wsub >= 4) { const wire = orient(mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.4, 4), mDark), new V3(sx * half * 0.4, 0.95, 0)); wire.position.set(X(0.55), 0.47, 0.07); hw.add(wire); }
+        if (wsub >= 5) for (let i = 0; i < 3; i++) hw.add(mesh(new THREE.BoxGeometry(0.1, WS.thick + 0.02, WS.chord + 0.02), std(0xf1c40f), X(0.4 + i * 0.12), 0.95, 0.15, false));
+      }
+      if (wt >= 2 && wt <= 4) {                           // элерон
+        hw.add(mesh(new THREE.BoxGeometry(half * 0.32, WS.thick + 0.02, 0.25), mA, X(0.72), 0, zAt(0.72) - chordAt(0.72) / 2 + 0.12, false));
+      }
+      if (wt === 2) {                                     // дюраль: линии заклёпок
+        for (let i = 0; i < wsub; i++) { const zf = -0.35 + i * 0.17; hw.add(mesh(new THREE.BoxGeometry(half * 0.9, WS.thick + 0.012, 0.02), mDark, X(0.5), 0, zAt(0.5) + zf * chordAt(0.5), false)); }
+        if (wsub >= 5) hw.add(mesh(new THREE.CapsuleGeometry(0.16, 0.9, 4, 8).rotateX(Math.PI / 2), mA, X(1), 0, zAt(1)));
+      }
+      if (wt === 3) {                                     // композит: полоса и растущие винглеты
+        hw.add(mesh(new THREE.BoxGeometry(half * 0.95, WS.thick + 0.01, 0.12), mA, X(0.5), 0, zAt(0.5) + chordAt(0.5) * 0.15, false));
+        const wh = 0.25 + wsub * 0.08;
+        const wl = mesh(new THREE.BoxGeometry(0.06, wh, chordAt(1) * 0.9), WS.mat, X(1), wh / 2, zAt(1) - 0.05); wl.rotation.z = -sx * 0.25; hw.add(wl);
+      }
+      if (wt >= 4) {                                      // карбон / феникс: передняя кромка, винглеты
+        const edge = wt === 5 ? std(0xffd23a, glow(0xff9900, 0.9)) : std(0xd4a017, { metalness: 0.36, roughness: 0.25 });
+        for (let i = 0; i < 6; i++) { const k0 = i / 6, k1 = (i + 1) / 6, km = (k0 + k1) / 2; const seg = mesh(new THREE.BoxGeometry(half / 6 + 0.02, WS.thick + 0.02, 0.1), edge, X(km), 0, zAt(km) + chordAt(km) / 2 - 0.04, false); seg.rotation.y = sx * Math.atan2(WS.sweep, half); hw.add(seg); }
+        const wh = 0.55;
+        const wl = mesh(new THREE.BoxGeometry(0.06, wh, chordAt(1)), wt === 5 ? edge : WS.mat, X(1), wh / 2, zAt(1)); wl.rotation.z = -sx * 0.2; hw.add(wl);
+        if (wt === 4) for (let i = 0; i < wsub; i++) hw.add(mesh(new THREE.BoxGeometry(0.05, WS.thick + 0.015, chordAt(0.3 + i * 0.13) * 0.8), std(0x2fd0ff, glow(0x1a9fe0, 1)), X(0.3 + i * 0.13), 0, zAt(0.3 + i * 0.13), false));
+        if (wt === 5) for (let i = 0; i < 6; i++) {        // перья феникса по задней кромке
+          const k = 0.2 + i * 0.15, len = 0.5 + i * 0.08;
+          const f = mesh(new THREE.BoxGeometry(0.2, 0.04, len), i % 2 ? edge : WS.mat, X(k), 0, zAt(k) - chordAt(k) / 2 - len / 2 + 0.05, false);
+          f.rotation.y = -sx * 0.12; hw.add(f);
+        }
+      }
+      if (wt >= 2) hw.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), sx > 0 ? NAV_L() : NAV_R(), X(1) + sx * 0.03, 0, zAt(1), false));
+      g.add(hw);
     }
-    if (L.wings === 1) for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.06, 0.6, 0.06), mDark, sx * 1.3, 0.1, 0.35));
   }
-  if (L.tail > 0) {
-    const k = L.tail === 2 ? 1.15 : 1;
-    const fin = new THREE.BoxGeometry(0.1, 1.1 * k, 0.95);
-    const p = fin.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setZ(i, p.getZ(i) - 0.35); fin.computeVertexNormals();
-    g.add(mesh(fin, mP, 0, 0.75, -1.75));
-    g.add(mesh(new THREE.BoxGeometry(2.3 * k, 0.08, 0.75), mP, 0, 0.12, -1.85));
-    if (L.tail === 2) {
-      g.add(mesh(new THREE.BoxGeometry(0.12, 1.0, 0.3), mA, 0, 0.8, -2.35));
-      g.add(mesh(new THREE.BoxGeometry(2.4, 0.1, 0.3), mA, 0, 0.12, -2.33));
+
+  // --- Хвост ---
+  const T = L.tail, tt = T === 0 ? -1 : T >= 15 ? 3 : tierOf(T), tsub = T >= 15 ? 5 : subOf(T);
+  if (T > 0) {
+    const finMat = tt === 0 ? std(0xc8a06a) : tt === 3 ? std(0xd4a017, { metalness: 0.36, roughness: 0.25 }) : mP;
+    const finGeo = (h, c, sweep) => { const f = new THREE.BoxGeometry(0.1, h, c); const p = f.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setZ(i, p.getZ(i) * 0.6 - sweep); } f.computeVertexNormals(); return f; };
+    const fh = (tt === 0 ? 0.8 : 1.05) + tsub * 0.06;
+    const stabSpan = (tt === 0 ? 1.8 : 2.2) + tsub * 0.1;
+    g.add(mesh(new THREE.BoxGeometry(stabSpan, 0.08, 0.75), finMat, 0, 0.12, -1.85));
+    if (tt <= 1) g.add(mesh(finGeo(fh, 0.95, tt === 0 ? 0.15 : 0.35), finMat, 0, 0.3 + fh / 2, -1.75));
+    if (tt >= 2) for (const sx of [-1, 1]) {          // двойной киль на концах стабилизатора
+      g.add(mesh(finGeo(fh * 0.85, 0.8, 0.3), finMat, sx * stabSpan / 2, 0.12 + fh * 0.42, -1.85));
+      if (tsub >= 3 || tt === 3) g.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), sx * stabSpan / 2, 0.12 + fh * 0.85, -2.0, false));
     }
+    if (tt === 3) g.add(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.8), std(0x2fd0ff, glow(0x1a9fe0, 0.9)), 0, 0.6, -1.8));
+    if (tsub >= 3 && tt <= 1) g.add(mesh(new THREE.BoxGeometry(0.12, fh * 0.85, 0.28), mA, 0, 0.3 + fh * 0.45, -2.3));   // руль направления
+    if (tt >= 1) g.add(mesh(new THREE.BoxGeometry(stabSpan * 0.9, 0.1, 0.25), mA, 0, 0.12, -2.3));                  // рули высоты
+    if (tt === 1 && tsub >= 4) g.add(mesh(new THREE.BoxGeometry(0.08, 0.3, 1.1), finMat, 0, 0.45, -1.2));            // форкиль
+    if (tt <= 1 && tsub >= 5) for (let i = 0; i < 2; i++) g.add(mesh(new THREE.BoxGeometry(0.12, 0.08, 0.6), std(0xf5f6f8), 0, 0.5 + i * 0.25, -1.8 - i * 0.12, false));
+    if (tt === 1 && tsub >= 3) g.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), 0, 0.3 + fh, -2.1, false));
   } else {
-    g.add(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.2), mDark, 0, 0, -2.05));
+    g.add(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.2), mDark, 0, 0, -2.1));
   }
-  propGroup = null;
-  if (L.prop > 0) {
-    g.add(mesh(new THREE.CylinderGeometry(0.5, 0.46, 0.5, 12).rotateX(Math.PI / 2), mDark, 0, 0, 2.05));
-    propGroup = new THREE.Group();
-    propGroup.position.set(0, 0, 2.38);
-    propGroup.add(mesh(new THREE.ConeGeometry(0.22, 0.45, 10).rotateX(Math.PI / 2), mA, 0, 0, 0.12));
-    const n = L.prop === 1 ? 2 : 3;
+
+  // --- Двигатель ---
+  const E = L.engine, et = E === 0 ? -1 : E >= 25 ? 5 : tierOf(E), esub = E >= 25 ? 5 : subOf(E);
+  const prop = (n, len, bladeMat, hubMat, bladeW = 0.18) => {
+    const pg = new THREE.Group();
+    pg.add(mesh(new THREE.ConeGeometry(0.2, 0.42, 12).rotateX(Math.PI / 2), hubMat, 0, 0, 0.12));
     for (let i = 0; i < n; i++) {
-      const b = mesh(new THREE.BoxGeometry(0.2, 0.95, 0.05), std(0x3a2a1a), 0, 0.5, 0);
-      b.rotation.y = 0.35;
-      const holder = new THREE.Group(); holder.rotation.z = i * Math.PI * 2 / n; holder.add(b);
-      propGroup.add(holder);
+      const b = mesh(new THREE.BoxGeometry(bladeW, len, 0.05), bladeMat, 0, len / 2 + 0.05, 0); b.rotation.y = 0.35;
+      const h = new THREE.Group(); h.rotation.z = i * Math.PI * 2 / n; h.add(b); pg.add(h);
     }
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 24), new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
-    disc.name = 'blur';
-    propGroup.add(disc);
-    g.add(propGroup);
-    for (let i = 0; i < Math.min(L.engine, 3); i++) for (const sx of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.4, 6).rotateX(Math.PI / 2.4), mDark, sx * 0.47, -0.15 - i * 0.12, 1.55));
-    if (L.fuel >= 2) {
-      const tank = mesh(new THREE.CapsuleGeometry(0.22 + L.fuel * 0.03, 1.1, 4, 10).rotateX(Math.PI / 2), mA, 0, -0.62, 0.2);
-      g.add(tank);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(len + 0.08, 24), new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    pg.add(disc); blurs.push(disc); spinners.push(pg);
+    return pg;
+  };
+  const nacelle = (x, y, z, r, len, mat) => g.add(mesh(new THREE.CylinderGeometry(r * 0.85, r, len, 12).rotateX(Math.PI / 2), mat, x, y, z));
+  const flameMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+  const jet = (x, y, z, r, col) => {
+    nacelle(x, y, z, r, 1.5, mMetal);
+    g.add(mesh(new THREE.TorusGeometry(r * 0.9, 0.05, 6, 16), mDark, x, y, z + 0.75));
+    const fan = new THREE.Group(); fan.position.set(x, y, z + 0.7);
+    for (let i = 0; i < 8; i++) { const b = mesh(new THREE.BoxGeometry(0.06, r * 0.8, 0.02), mDark, 0, r * 0.4, 0); const h = new THREE.Group(); h.rotation.z = i * Math.PI / 4; h.add(b); fan.add(h); }
+    g.add(fan); spinners.push(fan);
+    g.add(mesh(new THREE.CylinderGeometry(r * 0.7, r * 0.85, 0.35, 12).rotateX(Math.PI / 2), mDark, x, y, z - 0.9));
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(r * 0.65, 1.4, 10).rotateX(-Math.PI / 2), flameMat(col));
+    fl.position.set(x, y, z - 1.75); fl.visible = false; g.add(fl); flames.push(fl);
+  };
+  if (et >= 0 && et <= 2) {
+    const bladeMat = et === 0 ? (esub >= 5 ? std(0x8a6a3a) : std(0x3a2a1a)) : mMetal;
+    const cowlR = et === 0 ? 0.48 : 0.62;
+    g.add(mesh(new THREE.CylinderGeometry(cowlR, cowlR * 0.92, 0.55, 14).rotateX(Math.PI / 2), et === 0 ? mDark : mP, 0, 0, 2.05));
+    if (et === 1) for (let i = 0; i < 4 + esub; i++) {    // цилиндры звездообразного мотора
+      const a = i / (4 + esub) * Math.PI * 2;
+      g.add(mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.28, 6).rotateX(Math.PI / 2), mMetal, Math.cos(a) * 0.5, Math.sin(a) * 0.5, 2.3));
+    }
+    const n = et === 0 ? 2 : et === 1 ? 3 : (esub >= 4 ? 4 : 3);
+    const len = (et === 0 ? 0.75 : 0.95) + esub * 0.05;
+    const p0 = prop(n, len, bladeMat, et === 0 && esub < 3 ? mDark : mA); p0.position.set(0, 0, 2.38); g.add(p0);
+    if (et === 0 && esub >= 5) p0.children.slice(1, 1 + n).forEach((h) => h.add(mesh(new THREE.BoxGeometry(0.19, 0.12, 0.06), std(0xf1c40f), 0, len, 0, false)));
+    if (et >= 1) for (let i = 0; i < Math.min(esub, 4); i++) for (const sx of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.4, 6).rotateX(Math.PI / 2.4), mDark, sx * 0.5, -0.15 - i * 0.12, 1.55));
+    if (et === 2) for (const sx of [-1, 1]) {               // ещё два мотора на крыльях
+      const x = sx * Math.max(1.5, half * 0.42), z = 0.85;
+      nacelle(x, -0.22, z, 0.3, 1.3, mP);
+      const pw = prop(n, 0.7 + esub * 0.03, mMetal, mA, 0.15); pw.position.set(x, -0.22, z + 0.72); g.add(pw);
     }
   }
+  if (et === 3) {                                           // импеллеры в кольцевых каналах
+    g.add(mesh(new THREE.ConeGeometry(0.3, 0.6, 12).rotateX(Math.PI / 2), mA, 0, 0, 2.2));
+    const pos = [[1.15, 0.15, -0.7]]; if (esub >= 4) pos.push([Math.max(2.0, half * 0.6), -0.2, 0.5]);
+    for (const [px, py, pz] of pos) for (const sx of [-1, 1]) {
+      const r = 0.42 + esub * 0.02;
+      g.add(mesh(new THREE.CylinderGeometry(r + 0.08, r + 0.08, 0.7, 18, 1, true).rotateX(Math.PI / 2), std(paint, { side: THREE.DoubleSide, roughness: 0.5 }), sx * px, py, pz));
+      g.add(mesh(new THREE.TorusGeometry(r + 0.08, 0.06, 6, 18), mA, sx * px, py, pz + 0.35));
+      const fan = new THREE.Group(); fan.position.set(sx * px, py, pz);
+      fan.add(mesh(new THREE.SphereGeometry(0.12, 8, 6), mDark));
+      for (let i = 0; i < 6; i++) { const b = mesh(new THREE.BoxGeometry(0.12, r * 0.95, 0.03), mMetal, 0, r * 0.5, 0); b.rotation.y = 0.4; const h = new THREE.Group(); h.rotation.z = i * Math.PI / 3; h.add(b); fan.add(h); }
+      g.add(fan); spinners.push(fan);
+      g.add(mesh(new THREE.BoxGeometry(Math.abs(px) - 0.3, 0.08, 0.3), mDark, sx * (Math.abs(px) + 0.3) / 2, py, pz));
+    }
+  }
+  if (et >= 4) {                                            // реактивные двигатели
+    g.add(mesh(new THREE.ConeGeometry(bodyR * 0.95, 0.7, 14).rotateX(Math.PI / 2), mA, 0, 0, 2.45));
+    const col = et === 5 ? 0x5ab4ff : 0xff8a2a;
+    jet(1.05, -0.2, -0.2, 0.3, col); jet(-1.05, -0.2, -0.2, 0.3, col);
+    if (esub >= 3 || et === 5) { const x = Math.max(2.0, half * 0.55); jet(x, -0.35, 0.3, 0.26, col); jet(-x, -0.35, 0.3, 0.26, col); }
+    if (et === 5) {                                         // ракетный ускоритель на спине
+      g.add(mesh(new THREE.CylinderGeometry(0.34, 0.34, 2.6, 14).rotateX(Math.PI / 2), std(0xf5f6f8, { roughness: 0.4 }), 0, 0.85, -0.6));
+      g.add(mesh(new THREE.ConeGeometry(0.34, 0.8, 14).rotateX(Math.PI / 2), std(0xe74c3c), 0, 0.85, 1.1));
+      for (let i = 0; i < 3; i++) { const f = mesh(new THREE.BoxGeometry(0.05, 0.5, 0.6), std(0xe74c3c), 0, 0, 0); const h = new THREE.Group(); h.position.set(0, 0.85, -1.7); h.rotation.z = i * Math.PI * 2 / 3; f.position.y = 0.45; h.add(f); g.add(h); }
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.3, 2.4, 12).rotateX(-Math.PI / 2), flameMat(0x9fd8ff));
+      fl.position.set(0, 0.85, -3.1); fl.visible = false; g.add(fl); flames.push(fl);
+    }
+  }
+
+  // --- Топливные баки ---
+  if (E > 0) {
+    const F = L.fuel;
+    if (F >= 3) g.add(mesh(new THREE.CapsuleGeometry(0.2 + Math.min(F, 6) * 0.025, 1.1 + Math.min(F, 6) * 0.08, 4, 10).rotateX(Math.PI / 2), mA, 0, -0.62, 0.2));
+    if (F >= 6) for (const sx of [-1, 1]) g.add(mesh(new THREE.CapsuleGeometry(0.17, 0.9, 4, 10).rotateX(Math.PI / 2), mMetal, sx * Math.max(1.3, half * 0.35), -0.55, 0.4));
+    if (F >= 8 && W > 0) for (const sx of [-1, 1]) g.add(mesh(new THREE.CapsuleGeometry(0.15, 0.8, 4, 10).rotateX(Math.PI / 2), mA, sx * half * 0.98, -0.2, 0.2));
+    if (F >= 10) g.add(mesh(new THREE.CapsuleGeometry(0.22, 1.2, 4, 10).rotateX(Math.PI / 2), std(0xd4a017, { metalness: 0.36, roughness: 0.25 }), 0, bodyR + 0.05, -0.9));
+  }
+  // --- Шасси ---
   if (L.gear > 0) {
     for (const sx of [-1, 1]) {
       g.add(mesh(new THREE.BoxGeometry(0.08, 0.6, 0.08), mDark, sx * 0.55, -0.6, 0.9));
@@ -1118,8 +1416,14 @@ function buildPlaneMesh(L) {
     }
     g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10).rotateZ(Math.PI / 2), std(0x1a1a1a), 0, -0.5, -1.8));
   }
-  g.userData.span = span;
+  g.userData = { span, spinners, flames, blurs, paint: at === -1 ? 0xb08a5a : paint };
   return g;
+}
+function animateEngines(dt, spin, on) {
+  const u = plane.userData;
+  for (const sp of u.spinners) sp.rotation.z += spin * dt;
+  for (const b of u.blurs) b.material.opacity = on ? 0.25 : 0;
+  for (const f of u.flames) { f.visible = on; if (on) f.scale.set(1, 1, 0.8 + Math.random() * 0.4); }
 }
 function rebuildPlane() {
   const prev = plane;
@@ -1128,7 +1432,6 @@ function rebuildPlane() {
   scene.add(plane);
   S = computeStats(save.lv);
 }
-
 // =====================================================================
 //  Звук (WebAudio, синтез)
 // =====================================================================
@@ -1666,7 +1969,7 @@ function updateBands() {
 }
 function relaxBands(dt) {
   const by = terrainH(0, 0);
-  const target = new V3(0, by + 4.4, 1.8);
+  const target = new V3(0, by + SL.tips[0].y - 0.2, 1.8);
   pouch.position.lerp(target, Math.min(1, dt * 10));
   pouch.quaternion.identity();
   setBand(bands[0], new V3(SL.tips[0].x, by + SL.tips[0].y, SL.tips[0].z), pouch.position);
@@ -1708,6 +2011,7 @@ function resetRun() {
 function enterHangar() {
   mode = 'hangar';
   aim.pull = 0; aim.pulling = false;
+  buildSlingshot();
   rebuildPlane();
   resetRun();
   placeOnSlingshot();
@@ -1743,7 +2047,7 @@ function endFlight(reason, detail = '') {
   if (P.ended) return;
   P.ended = true; P.endTime = 0; P.reason = reason;
   if (reason === 'crash') {
-    spawnDebris(P.pos, P.vel, [[0xb08a5a, 0xc0392b, 0xe67e22, 0x2e86de, 0xf2f4f7][save.lv.aero], 0x2b2b2b, 0xd9bd8c]);
+    spawnDebris(P.pos, P.vel, [plane.userData.paint, 0x2b2b2b, 0xd9bd8c]);
     plane.visible = false;
     Sound.thud(0.9, 0.9);
     P.vel.multiplyScalar(0);
@@ -1820,7 +2124,7 @@ function renderShop() {
     else if (locked) btn = '<button class="buy" disabled>🔒</button>';
     else btn = `<button class="buy" data-k="${key}" ${save.money < cost ? 'disabled' : ''}><i class="coin"></i>${cost}</button>`;
     const next = lv < maxLv ? ` → <span style="color:#ffd76a">${u.levels[lv + 1]}</span>` : '';
-    const desc = locked ? (key === 'fuel' ? 'Топливо появится только после покупки пропеллера.' : 'Сначала купи пропеллер.') : u.desc;
+    const desc = locked ? 'Топливо появится только после покупки двигателя (пропеллера).' : u.desc;
     card.innerHTML = `<div class="ico">${u.icon}</div><div class="name">${u.name}</div>${btn}<div class="lvl">${u.levels[lv]}${next}</div><div class="pips">${pips}</div><div class="desc">${desc}</div>`;
     cards.appendChild(card);
   }
@@ -1836,9 +2140,11 @@ function buy(key) {
   persist();
   Sound.init();
   Sound.blip(520, 0.15, 'square', 0.12); setTimeout(() => Sound.blip(780, 0.2, 'square', 0.1), 100);
+  if (key === 'sling') buildSlingshot();
   rebuildPlane();
   placeOnSlingshot();
   renderShop();
+  toast(`${UPG[key].name}: ${UPG[key].levels[save.lv[key]]}`);
 }
 function renderStats() {
   const s = computeStats(save.lv);
@@ -1847,10 +2153,10 @@ function renderStats() {
   $('stats').innerHTML =
     bar('Скорость запуска', Math.round(s.launch * 3.6) + ' км/ч', (s.launch - 20) / 54) +
     bar('Подъёмная сила', s.liftK > 0 ? 'качество ' + glide : 'нет', s.liftK / 0.036) +
-    bar('Устойчивость', ['слабая', 'хорошая', 'отличная'][save.lv.tail], (save.lv.tail + 0.3) / 2.3) +
-    bar('Управляемость', ['почти нет', 'слабая', 'средняя', 'хорошая', 'отличная', 'превосходная'][save.lv.wings + save.lv.tail], (save.lv.wings + save.lv.tail + 0.3) / 5.3) +
-    bar('Тяга', s.thrust > 0 ? s.thrust.toFixed(1) + ' м/с²' : 'нет пропеллера', s.thrust / 14.1) +
-    bar('Топливо', s.fuel > 0 ? s.fuel + ' с' : 'нет', s.fuel / 28) +
+    bar('Устойчивость', save.lv.tail ? ['хорошая', 'отличная', 'идеальная', 'идеальная'][tierOf(save.lv.tail)] : 'слабая', (save.lv.tail + 1) / 16) +
+    bar('Управляемость', ['почти нет', 'слабая', 'средняя', 'хорошая', 'отличная', 'превосходная'][Math.round((save.lv.wings / 25 + save.lv.tail / 15) / 2 * 5)], (save.lv.wings / 25 + save.lv.tail / 15) / 2) +
+    bar('Тяга', s.thrust > 0 ? s.thrust.toFixed(1) + ' м/с²' : 'нет двигателя', s.thrust / 15.4) +
+    bar('Топливо', s.fuel > 0 ? s.fuel + ' с' : 'нет', s.fuel / 30) +
     bar('Сопротивление', (s.cd0 * 10000).toFixed(1), 1 - (s.cd0 - 0.0005) / 0.0008);
   $('records').innerHTML = `Рекорд: <b>${save.best} м</b> из ${FINISH_Z} · Полётов: <b>${save.flights}</b>${save.finishes ? ` · Финишей: <b>${save.finishes}</b>` : ''}`;
   $('opt-invert').checked = !!save.invert;
@@ -2108,6 +2414,7 @@ function frame(now) {
   updateTouchUi();
 
   for (const m of movers) m.update(simTime, dt);
+  animateSlingshot(simTime);
   updateCoins(simTime, dt);
 
   if (mode === 'aim') {
@@ -2136,12 +2443,7 @@ function frame(now) {
       if (!P.ended) collectStuff();
       plane.position.copy(P.pos);
       plane.quaternion.copy(P.q);
-      if (propGroup) {
-        const spin = P.throttle ? 60 : Math.min(25, P.vel.length() * 0.5);
-        propGroup.rotation.z += spin * dt;
-        const blur = propGroup.getObjectByName('blur');
-        if (blur) blur.material.opacity = P.throttle ? 0.25 : 0;
-      }
+      animateEngines(dt, P.throttle ? 60 : Math.min(25, P.vel.length() * 0.5), P.throttle);
       if (P.throttle) {
         puffTimer += dt;
         if (puffTimer > 0.05) { puffTimer = 0; _f.set(0, 0, 1).applyQuaternion(P.q); spawnPuff(_tmp.copy(P.pos).addScaledVector(_f, -1.6).add(_vb.set(0, -0.3, 0)), 0xffffff, 0.3, 0.55, _vb.copy(P.vel).multiplyScalar(0.55)); }
@@ -2159,7 +2461,7 @@ function frame(now) {
     }
     relaxBands(dt);
   } else if (mode === 'hangar' || mode === 'result') {
-    if (propGroup) propGroup.rotation.z += dt * 1.5;
+    animateEngines(dt, 1.5, false);
     if (mode === 'result') relaxBands(dt);
   }
 
@@ -2176,7 +2478,6 @@ function frame(now) {
 
 buildTerrain();
 generateWorld();
-buildSlingshot();
 mergeStatic(statics);
 mergeStatic(cloudRoot, 600);
 applyQuality();
@@ -2187,4 +2488,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
