@@ -56,7 +56,7 @@ const UPG = {
     desc: 'Снижает сопротивление воздуха — дальше летишь, меньше теряешь скорость.' },
   gear: { icon: '🛞', name: 'Шасси', costs: [300],
     levels: ['Посадка на брюхо', 'Колёса'],
-    desc: 'Мягкие посадки и бонус за приземление +50% вместо +20%.' },
+    desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом.' },
 };
 const UPG_ORDER = ['sling', 'wings', 'tail', 'prop', 'engine', 'fuel', 'aero', 'gear'];
 
@@ -294,6 +294,7 @@ function addObstacle(prims, update, margin = 0) {
   for (const p of prims) {
     let z0, z1;
     if (p.t === 'cyl') { z0 = p.z - p.r; z1 = p.z + p.r; }
+    else if (p.t === 'cone') { z0 = p.z - p.r0; z1 = p.z + p.r0; }
     else if (p.t === 'sph') { z0 = p.c.z - p.r; z1 = p.c.z + p.r; }
     else if (p.t === 'box') { z0 = p.min.z; z1 = p.max.z; }
     else if (p.t === 'seg') { z0 = Math.min(p.a.z, p.b.z) - p.r - 20; z1 = Math.max(p.a.z, p.b.z) + p.r + 20; }
@@ -309,7 +310,16 @@ function addObstacle(prims, update, margin = 0) {
 function addTree(x, z, s, pine) {
   const y = terrainH(x, z);
   treeList.push({ x, y, z, s, pine, rot: hash2(x, z) * 6.28 });
-  addObstacle([{ t: 'cyl', x, z, r: (pine ? 1.7 : 2.3) * s, y0: y - 1, y1: y + (pine ? 11 : 9.5) * s }]);
+  // Хитбокс повторяет форму модели: ствол + конусы ели или шар кроны лиственного дерева
+  const b = y - 0.2;
+  const trunk = { t: 'cyl', x, z, r: 0.42 * s, y0: b - 1, y1: b + 3 * s };
+  if (pine) {
+    addObstacle([trunk,
+      { t: 'cone', x, z, r0: 2.0 * s, y0: b + 2.5 * s, y1: b + 7.5 * s },
+      { t: 'cone', x, z, r0: 1.55 * s, y0: b + 5.8 * s, y1: b + 9.8 * s }]);
+  } else {
+    addObstacle([trunk, { t: 'sph', c: new V3(x, b + 5.8 * s, z), r: 2.45 * s }]);
+  }
 }
 function addDecorTree(x, z, s, pine) { treeList.push({ x, y: terrainH(x, z), z, s, pine, rot: hash2(x, z) * 6.28 }); }
 
@@ -598,7 +608,48 @@ function addBirds(x, z, y, phase) {
 }
 
 // --- Монеты и кольца ---
-const COIN_GEO = new THREE.CylinderGeometry(1.0, 1.0, 0.22, 16).rotateZ(Math.PI / 2);
+// Монета: рифлёный гурт по краю, выпуклый ободок и знак доллара на обеих сторонах
+const COIN_R = 1.0, COIN_T = 0.3;
+const COIN_GEO = (() => {
+  const side = new THREE.CylinderGeometry(COIN_R, COIN_R, COIN_T, 72, 1, true);
+  const p = side.attributes.position;
+  for (let i = 0; i < p.count; i++) {                       // чередуем радиус — получаются рёбра гурта
+    const a = Math.atan2(p.getZ(i), p.getX(i));
+    const k = Math.round((a + Math.PI) / (Math.PI * 2) * 72) % 2 ? 0.955 : 1;
+    p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k);
+  }
+  side.computeVertexNormals();
+  const parts = [side];
+  for (const sy of [1, -1]) {
+    const rim = new THREE.TorusGeometry(COIN_R - 0.07, 0.07, 6, 48).rotateX(Math.PI / 2);
+    rim.translate(0, sy * COIN_T / 2, 0);
+    const flat = new THREE.RingGeometry(COIN_R * 0.82, COIN_R - 0.07, 48, 1).rotateX(sy > 0 ? -Math.PI / 2 : Math.PI / 2);
+    flat.translate(0, sy * (COIN_T / 2 - 0.005), 0);
+    parts.push(rim, flat);
+  }
+  const gold = mergeGeometries(parts, false);
+  const faces = [];
+  for (const sy of [1, -1]) {
+    const f = new THREE.CircleGeometry(COIN_R * 0.84, 48).rotateX(sy > 0 ? -Math.PI / 2 : Math.PI / 2);
+    f.translate(0, sy * (COIN_T / 2 - 0.02), 0);
+    faces.push(f);
+  }
+  return mergeGeometries([gold, mergeGeometries(faces, false)], true).rotateZ(Math.PI / 2);
+})();
+function coinFaceTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(48, 44, 6, 64, 64, 64);
+  grd.addColorStop(0, '#ffe680'); grd.addColorStop(0.6, '#f5bd1f'); grd.addColorStop(1, '#d99a0b');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = 'rgba(150, 95, 0, .55)'; g.lineWidth = 3;
+  g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.stroke();
+  g.font = '900 78px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = 'rgba(255, 245, 190, .9)'; g.fillText('$', 61, 63);    // блик — имитация чеканки
+  g.fillStyle = '#a86a00'; g.fillText('$', 65, 67);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
 let coinMesh;
 function addCoin(x, y, z) { coins.push({ pos: new V3(x, y, z), taken: false }); }
 function coinLine(x0, y0, z0, x1, y1, z1, n, arc = 0) {
@@ -608,7 +659,10 @@ function coinLine(x0, y0, z0, x1, y1, z1, n, arc = 0) {
   }
 }
 function buildCoins() {
-  coinMesh = new THREE.InstancedMesh(COIN_GEO, std(0xffc93c, { metalness: 0.6, roughness: 0.3, emissive: 0x5a3c00, flatShading: false }), coins.length);
+  coinMesh = new THREE.InstancedMesh(COIN_GEO, [
+    new THREE.MeshStandardMaterial({ color: 0xffc93c, metalness: 0.65, roughness: 0.3, emissive: 0x5a3c00, flatShading: true }),
+    (() => { const t = coinFaceTexture(); return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.35, metalness: 0.45, roughness: 0.35 }); })(),
+  ], coins.length);
   coinMesh.castShadow = true;
   scene.add(coinMesh);
 }
@@ -1364,6 +1418,13 @@ function groundContact(dt) {
 // --- Столкновения ---
 function hitPrim(p, pr, rad) {
   switch (pr.t) {
+    case 'cone': {      // вертикальный конус: радиус r0 у основания сходится к нулю на вершине
+      if (p.y < pr.y0 - rad || p.y > pr.y1 + rad) return false;
+      const k = clamp((p.y - pr.y0) / (pr.y1 - pr.y0), 0, 1);
+      const rr = pr.r0 * (1 - k) + rad;
+      const dx = p.x - pr.x, dz = p.z - pr.z;
+      return dx * dx + dz * dz < rr * rr;
+    }
     case 'cyl': {
       if (p.y < pr.y0 - rad || p.y > pr.y1 + rad) return false;
       const dx = p.x - pr.x, dz = p.z - pr.z, rr = pr.r + rad;
@@ -1575,12 +1636,6 @@ function finishResults() {
   const rows = [];
   rows.push(['Дистанция ' + dist + ' м', dist]);
   if (P.coins) rows.push([`Монеты и кольца${P.rings ? ` (колец: ${P.rings})` : ''}`, P.coins]);
-  let land = 0;
-  if (P.landed) {
-    land = Math.round(dist * (S.gear ? 0.5 : 0.2));
-    rows.push([S.gear ? 'Посадка на шасси +50%' : 'Посадка на брюхо +20%', land]);
-    if (P.lastImpact < 2.5 && P.bounces === 0) rows.push(['Мягкое касание', 100]);
-  }
   if (P.finished) rows.push(['🏁 Финиш!', 1500]);
   const total = rows.reduce((s, r) => s + r[1], 0);
   save.money += total;
@@ -1998,4 +2053,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
