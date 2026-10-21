@@ -2677,7 +2677,7 @@ function buildTargets(idx) {
         world.add(stand);
       }
       // Подсветка: пульсирующее свечение вокруг мишени
-      const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); halo.renderOrder = 10; grp.add(halo);
+      const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); grp.add(halo);
       targets.push({ grp, body, c, base: c.clone(), r, air, halo, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
       placed = true;
     }
@@ -2691,17 +2691,7 @@ const glowTex = (() => {
   g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(cv);
 })();
-// Свечение мишени рисуется поверх всего (depthTest: false), поэтому видно и сквозь деревья, скалы и дома
-// Насыщенный оранжево-красный ореол с яркой каймой: заметен и на снегу, и на небе, и на траве
-const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: (() => {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
-  const g = cv.getContext('2d'), grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grd.addColorStop(0, 'rgba(255,90,40,.10)'); grd.addColorStop(0.5, 'rgba(255,80,30,.28)');
-  grd.addColorStop(0.66, 'rgba(255,60,20,.85)'); grd.addColorStop(0.74, 'rgba(255,214,70,1)');
-  grd.addColorStop(0.82, 'rgba(255,60,20,.75)'); grd.addColorStop(1, 'rgba(255,60,20,0)');
-  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
-})(), depthTest: false, depthWrite: false, fog: false, transparent: true });
+const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc94a, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 1 });
 function resetTargets() {
   for (const t of targets) { t.dead = false; t.hp = t.maxHp; t.grp.visible = true; t.flash = 0; t.body.scale.setScalar(1); }
 }
@@ -2712,9 +2702,7 @@ function updateTargets(time, dt) {
     if (t.air) t.body.rotation.y = Math.sin(time * 0.7 + t.ph) * 0.5; else t.body.rotation.z = Math.sin(time * 1.6 + t.ph) * 0.06;
     if (t.spin) for (const ch of t.body.children) if (ch.userData.spin) ch.rotation.y += dt * 30;
     if (t.flash > 0) { t.flash = Math.max(0, t.flash - dt); t.body.scale.setScalar(1 + t.flash * 1.6); }
-    // издалека свечение не становится меньше заметной точки на экране
-    const pulse = 1 + 0.12 * Math.sin(time * 4 + t.ph);
-    t.halo.scale.setScalar(Math.max(t.r * 3.2, camera.position.distanceTo(t.c) * 0.045) * pulse);
+    t.halo.scale.setScalar(t.r * (3.1 + 0.5 * Math.sin(time * 4 + t.ph)));
   }
 }
 const SHARD_GEO = new THREE.TetrahedronGeometry(0.45, 0);
