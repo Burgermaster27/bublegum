@@ -1739,15 +1739,12 @@ if (isTouch) document.body.classList.add('touch');
   stick.addEventListener('pointermove', (e) => { if (e.pointerId === sid) moveStick(e); });
   stick.addEventListener('pointerup', endStick);
   stick.addEventListener('pointercancel', endStick);
-  const press = (e) => {
-    e.preventDefault(); capture(btn, e.pointerId); btn.classList.add('on');
+  // Мотор — переключатель: нажал — включился, нажал ещё раз — выключился (удобно одной рукой)
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     Sound.init();
-    touch.btn = true;
-  };
-  const release = () => { btn.classList.remove('on'); touch.btn = false; };
-  btn.addEventListener('pointerdown', press);
-  btn.addEventListener('pointerup', release);
-  btn.addEventListener('pointercancel', release);
+    if (P.fuel > 0) touch.btn = !touch.btn;
+  });
   $('tquit').addEventListener('click', () => { if (mode === 'flight' && !P.ended) endFlight('quit'); });
   $('tfull').addEventListener('click', async () => {
     try {
@@ -1761,8 +1758,12 @@ function updateTouchUi() {
   const show = isTouch && mode === 'flight' && !P.ended;
   $('touch').classList.toggle('hidden', !show);
   $('tbtn').classList.toggle('hidden', !(S.thrust > 0));
-  $('tbtn').classList.toggle('dim', !(P.fuel > 0));
+  if (!(P.fuel > 0)) touch.btn = false;
   if (!show) { touch.x = touch.y = 0; touch.btn = false; }
+  $('tbtn').classList.toggle('dim', !(P.fuel > 0));
+  $('tbtn').classList.toggle('on', touch.btn);
+  const label = touch.btn ? 'Мотор ВКЛ' : 'Мотор';
+  if ($('tbtn').textContent !== label) $('tbtn').textContent = label;
 }
 
 // =====================================================================

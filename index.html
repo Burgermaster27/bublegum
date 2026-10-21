@@ -147,14 +147,14 @@
   body.touch .kb-only, body.touch #hud-help { display: none !important; }
   canvas, #touch * { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   #touch { pointer-events: none; }
-  #stick { position: absolute; left: 50%; transform: translateX(-50%); bottom: 16px; width: 200px; height: 200px; border-radius: 50%;
+  #stick { position: absolute; right: 16px; bottom: 16px; width: 200px; height: 200px; border-radius: 50%;
     background: rgba(18, 26, 38, .28); border: 2px solid rgba(255,255,255,.3); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
   #knob { width: 84px; height: 84px; border-radius: 50%; background: rgba(255,255,255,.6); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
-  #tbtn { position: absolute; right: 18px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
+  #tbtn { position: absolute; left: 18px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
     background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
-  #tbtn.on { background: rgba(255, 140, 30, .95); transform: scale(.94); }
+  #tbtn.on { background: rgba(255, 120, 30, .95); color: #fff; box-shadow: 0 0 0 4px rgba(255,200,80,.55), 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.dim { opacity: .35; }
-  #tquit { position: absolute; left: 18px; bottom: 22px; padding: 7px 12px; background: rgba(18,26,38,.7);
+  #tquit { position: absolute; left: 18px; bottom: 158px; padding: 7px 12px; background: rgba(18,26,38,.7);
     color: #fff; font-size: 13px; pointer-events: auto; }
   /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
   body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; top: 72px; bottom: auto; }
@@ -180,6 +180,7 @@
     #stick { width: 170px; height: 170px; bottom: 10px; }
     #knob { width: 72px; height: 72px; }
     #tbtn { width: 100px; height: 100px; bottom: 14px; }
+    #tquit { bottom: 126px; }
     body.touch #hud-fuel { top: 54px; }
   }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
@@ -198,9 +199,9 @@
     .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
     .prog-labels { justify-content: center; }
     body.touch #hud-fuel { top: 128px; width: 50vw; }
-    #stick { left: 16px; transform: none; width: 180px; height: 180px; }
+    #stick { width: 180px; height: 180px; }
     #tbtn { width: 108px; height: 108px; }
-    #tquit { left: auto; right: 18px; bottom: 146px; }
+    #tquit { bottom: 146px; }
     #hud-warn { top: 180px; font-size: 13px; }
   }
 </style>
