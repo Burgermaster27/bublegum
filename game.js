@@ -1547,10 +1547,11 @@ function collectStuff() {
     if (Math.abs(c.pos.z - P.pos.z) > 8) continue;
     const hit = distToSeg(c.pos, P.prevNose, _tail) < COIN_PICK_R + 0.5 || (half > 0 && distToSeg(c.pos, _wl, _wr) < COIN_PICK_R + 0.15);
     if (hit) {
-      c.taken = true; c.anim = 0; c.from.copy(c.pos);
+      // Монета просто исчезает, оставив несколько искорок
+      c.taken = true; c.anim = 1;
       P.coins += 5;
       Sound.blip(880 + Math.random() * 120, 0.1, 'triangle', 0.18);
-      for (let i = 0; i < 6; i++) spawnPuff(c.pos.clone(), 0xffe066, 0.18, 0.45, new V3((Math.random() - 0.5) * 6, (Math.random() - 0.2) * 6, (Math.random() - 0.5) * 6));
+      for (let i = 0; i < 4; i++) spawnPuff(c.pos.clone(), 0xffe680, 0.1, 0.35, new V3((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3));
     }
   }
   // Кольцо засчитывается, только если сквозь него прошёл весь фюзеляж:
