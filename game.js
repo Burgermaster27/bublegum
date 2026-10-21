@@ -2052,8 +2052,54 @@ function resetRun() {
   P.w.set(0, 0, 0); P.vel.set(0, 0, 0); P.turb.set(0, 0, 0);
 }
 
+// Режим осмотра самолёта: тап по пустому месту в мастерской прячет меню
+const insp = { on: false, yaw: 2.4, pitch: 0.25, dist: 11, ptrs: new Map(), pinch: 0 };
+function setInspect(on) {
+  insp.on = on;
+  $('hangar').classList.toggle('hidden', on);
+  $('inspect').classList.toggle('hidden', !on);
+  // рогатка закрывает самолёт с некоторых ракурсов — на время осмотра прячем её
+  if (slingGroup) slingGroup.visible = !on;
+  for (const b of bands) b.visible = !on;
+  pouch.visible = !on;
+  if (on) {
+    // начинаем с того ракурса, где камера уже стоит, чтобы не было рывка
+    const d = _tmp.copy(camPos).sub(plane.position);
+    insp.dist = clamp(d.length(), 8, 22);
+    insp.yaw = Math.atan2(d.x, d.z);
+    insp.pitch = clamp(Math.asin(d.y / Math.max(0.001, d.length())), -0.2, 1.3);
+  }
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (mode !== 'hangar') return;
+  if (!insp.on) { setInspect(true); return; }
+  insp.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!insp.on || !insp.ptrs.has(e.pointerId)) return;
+  const p = insp.ptrs.get(e.pointerId);
+  if (insp.ptrs.size === 1) {
+    insp.yaw -= (e.clientX - p.x) * 0.008;
+    insp.pitch = clamp(insp.pitch + (e.clientY - p.y) * 0.006, -0.2, 1.35);
+  }
+  p.x = e.clientX; p.y = e.clientY;
+  if (insp.ptrs.size === 2) {                     // щипок — приближение
+    const [a, b] = [...insp.ptrs.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (insp.pinch) insp.dist = clamp(insp.dist * insp.pinch / d, 5, 24);
+    insp.pinch = d;
+  }
+});
+const inspUp = (e) => { insp.ptrs.delete(e.pointerId); if (insp.ptrs.size < 2) insp.pinch = 0; };
+renderer.domElement.addEventListener('pointerup', inspUp);
+renderer.domElement.addEventListener('pointercancel', inspUp);
+renderer.domElement.addEventListener('wheel', (e) => { if (insp.on) { insp.dist = clamp(insp.dist * (1 + Math.sign(e.deltaY) * 0.1), 5, 24); e.preventDefault(); } }, { passive: false });
+$('insp-back').addEventListener('click', () => setInspect(false));
+
 function enterHangar() {
   mode = 'hangar';
+  if (insp.on) setInspect(false);
   aim.pull = 0; aim.pulling = false;
   buildSlingshot();
   rebuildPlane();
@@ -2288,6 +2334,7 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (mode === 'aim' && e.code === 'Space') aim.pulling = true;
   if (mode === 'aim' && e.code === 'Escape') enterHangar();
+  if (mode === 'hangar' && insp.on && e.code === 'Escape') setInspect(false);
   if (mode === 'hangar' && e.code === 'Enter') enterAim();
   else if (mode === 'result' && (e.code === 'Enter' || e.code === 'Space')) enterHangar();
   if (mode === 'flight' && e.code === 'KeyR' && !P.ended && !paused) endFlight('quit');
@@ -2379,7 +2426,15 @@ function updateTouchUi() {
 const camLook = new V3(), camPos = new V3(), camHeading = new V3(0, 0, 1);
 let orbit = 0;
 function updateCamera(dt) {
-  if (mode === 'hangar') {
+  if (mode === 'hangar' && insp.on) {
+    // Осмотр: камера на сфере вокруг самолёта, пользователь крутит её пальцем/мышью
+    const c = plane.position;
+    const cp = Math.cos(insp.pitch);
+    const target = _tmp.set(c.x + Math.sin(insp.yaw) * cp * insp.dist, c.y + Math.sin(insp.pitch) * insp.dist, c.z + Math.cos(insp.yaw) * cp * insp.dist);
+    target.y = Math.max(target.y, terrainH(target.x, target.z) + 0.5);
+    camPos.lerp(target, 1 - Math.exp(-dt * 10));
+    camLook.lerp(c, 1 - Math.exp(-dt * 10));
+  } else if (mode === 'hangar') {
     orbit += dt * 0.18;
     const c = launchBase;
     const a = Math.PI * 0.72 + Math.sin(orbit) * 0.55;
