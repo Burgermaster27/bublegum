@@ -2096,6 +2096,7 @@ renderer.domElement.addEventListener('pointerup', inspUp);
 renderer.domElement.addEventListener('pointercancel', inspUp);
 renderer.domElement.addEventListener('wheel', (e) => { if (insp.on) { insp.dist = clamp(insp.dist * (1 + Math.sign(e.deltaY) * 0.1), 5, 24); e.preventDefault(); } }, { passive: false });
 $('insp-back').addEventListener('click', () => setInspect(false));
+$('open-inspect').addEventListener('click', () => setInspect(true));
 
 function enterHangar() {
   mode = 'hangar';
@@ -2438,9 +2439,11 @@ function updateCamera(dt) {
     orbit += dt * 0.18;
     const c = launchBase;
     const a = Math.PI * 0.72 + Math.sin(orbit) * 0.55;
-    const target = _tmp.set(c.x + Math.sin(a) * 9, c.y + 2.6, c.z + Math.cos(a) * 9);
+    // На вертикальном экране меню занимает низ — смотрим ниже самолёта, чтобы он оказался в верхней свободной части
+    const portrait = camera.aspect < 1, R = portrait ? 15 : 9;
+    const target = _tmp.set(c.x + Math.sin(a) * R, c.y + (portrait ? 3.5 : 2.6), c.z + Math.cos(a) * R);
     camPos.lerp(target, 1 - Math.exp(-dt * 3));
-    camLook.lerp(_tmp2.set(c.x - 2.4, c.y + 0.2, c.z + 0.5), 1 - Math.exp(-dt * 3));
+    camLook.lerp(_tmp2.set(c.x - (portrait ? 0 : 2.4), c.y + (portrait ? -5.5 : 0.2), c.z + 0.5), 1 - Math.exp(-dt * 3));
   } else if (mode === 'aim') {
     // Камера смотрит по курсу прицела, а не по углу вверх — иначе при натяжении она уезжает в небо
     const yaw = -aim.yaw * Math.PI / 180;
