@@ -2080,29 +2080,31 @@ function buildPlaneMesh(L) {
         }
       }
       if (wt >= 2) hw.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), sx > 0 ? NAV_L() : NAV_R(), X(1) + sx * 0.03, 0, zAt(1), false));
+      hw.userData.side = sx;
       g.add(hw);
     }
   }
 
   // --- Хвост ---
   const T = L.tail, tt = T === 0 ? -1 : T >= 15 ? 3 : tierOf(T), tsub = T >= 15 ? 5 : subOf(T);
+  const tg = new THREE.Group(); tg.userData.part = 'tail'; g.add(tg);   // хвост — отдельная часть, может отвалиться
   if (T > 0) {
     const finMat = tt === 0 ? std(0xc8a06a) : tt === 3 ? std(0xd4a017, { metalness: 0.36, roughness: 0.25 }) : mP;
     const finGeo = (h, c, sweep) => { const f = new THREE.BoxGeometry(0.1, h, c); const p = f.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setZ(i, p.getZ(i) * 0.6 - sweep); } f.computeVertexNormals(); return f; };
     const fh = (tt === 0 ? 0.8 : 1.05) + tsub * 0.06;
     const stabSpan = (tt === 0 ? 1.8 : 2.2) + tsub * 0.1;
-    g.add(mesh(new THREE.BoxGeometry(stabSpan, 0.08, 0.75), finMat, 0, 0.12, -1.85));
-    if (tt <= 1) g.add(mesh(finGeo(fh, 0.95, tt === 0 ? 0.15 : 0.35), finMat, 0, 0.3 + fh / 2, -1.75));
+    tg.add(mesh(new THREE.BoxGeometry(stabSpan, 0.08, 0.75), finMat, 0, 0.12, -1.85));
+    if (tt <= 1) tg.add(mesh(finGeo(fh, 0.95, tt === 0 ? 0.15 : 0.35), finMat, 0, 0.3 + fh / 2, -1.75));
     if (tt >= 2) for (const sx of [-1, 1]) {          // двойной киль на концах стабилизатора
-      g.add(mesh(finGeo(fh * 0.85, 0.8, 0.3), finMat, sx * stabSpan / 2, 0.12 + fh * 0.42, -1.85));
-      if (tsub >= 3 || tt === 3) g.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), sx * stabSpan / 2, 0.12 + fh * 0.85, -2.0, false));
+      tg.add(mesh(finGeo(fh * 0.85, 0.8, 0.3), finMat, sx * stabSpan / 2, 0.12 + fh * 0.42, -1.85));
+      if (tsub >= 3 || tt === 3) tg.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), sx * stabSpan / 2, 0.12 + fh * 0.85, -2.0, false));
     }
-    if (tt === 3) g.add(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.8), std(0x2fd0ff, glow(0x1a9fe0, 0.9)), 0, 0.6, -1.8));
-    if (tsub >= 3 && tt <= 1) g.add(mesh(new THREE.BoxGeometry(0.12, fh * 0.85, 0.28), mA, 0, 0.3 + fh * 0.45, -2.3));   // руль направления
-    if (tt >= 1) g.add(mesh(new THREE.BoxGeometry(stabSpan * 0.9, 0.1, 0.25), mA, 0, 0.12, -2.3));                  // рули высоты
-    if (tt === 1 && tsub >= 4) g.add(mesh(new THREE.BoxGeometry(0.08, 0.3, 1.1), finMat, 0, 0.45, -1.2));            // форкиль
-    if (tt <= 1 && tsub >= 5) for (let i = 0; i < 2; i++) g.add(mesh(new THREE.BoxGeometry(0.12, 0.08, 0.6), std(0xf5f6f8), 0, 0.5 + i * 0.25, -1.8 - i * 0.12, false));
-    if (tt === 1 && tsub >= 3) g.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), 0, 0.3 + fh, -2.1, false));
+    if (tt === 3) tg.add(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.8), std(0x2fd0ff, glow(0x1a9fe0, 0.9)), 0, 0.6, -1.8));
+    if (tsub >= 3 && tt <= 1) tg.add(mesh(new THREE.BoxGeometry(0.12, fh * 0.85, 0.28), mA, 0, 0.3 + fh * 0.45, -2.3));   // руль направления
+    if (tt >= 1) tg.add(mesh(new THREE.BoxGeometry(stabSpan * 0.9, 0.1, 0.25), mA, 0, 0.12, -2.3));                  // рули высоты
+    if (tt === 1 && tsub >= 4) tg.add(mesh(new THREE.BoxGeometry(0.08, 0.3, 1.1), finMat, 0, 0.45, -1.2));            // форкиль
+    if (tt <= 1 && tsub >= 5) for (let i = 0; i < 2; i++) tg.add(mesh(new THREE.BoxGeometry(0.12, 0.08, 0.6), std(0xf5f6f8), 0, 0.5 + i * 0.25, -1.8 - i * 0.12, false));
+    if (tt === 1 && tsub >= 3) tg.add(mesh(new THREE.SphereGeometry(0.07, 6, 4), std(0xffffff, glow(0xffffff, 1.2)), 0, 0.3 + fh, -2.1, false));
   } else {
     g.add(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.2), mDark, 0, 0, -2.1));
   }
@@ -2203,7 +2205,14 @@ function buildPlaneMesh(L) {
     g.add(mesh(new THREE.BoxGeometry(0.05, 0.3, 0.05), G.strut, 0, -0.4, -1.8));
     g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10).rotateZ(Math.PI / 2), G.tire, 0, -0.55, -1.8));
   }
-  g.userData = { span, spinners, flames, blurs, paint: at === -1 ? 0xb08a5a : paint };
+  // Крылья — отдельные части: в группу стороны уходит само крыло и всё, что висит на нём (моторы, баки)
+  const wing = {};
+  if (W > 0) for (const sx of [-1, 1]) {
+    const wg = new THREE.Group(); wg.userData.part = 'wing'; wing[sx] = wg;
+    for (const ch of [...g.children]) if (ch.userData.side === sx || (!ch.userData.part && ch.userData.side === undefined && ch.position.x * sx > 0.95)) { g.remove(ch); wg.add(ch); }
+    g.add(wg);
+  }
+  g.userData = { span, spinners, flames, blurs, wing, tail: tg, paint: at === -1 ? 0xb08a5a : paint };
   return g;
 }
 function animateEngines(dt, spin, on) {
@@ -2477,6 +2486,8 @@ function physicsStep(dt, inp) {
     tq.z += inp.roll * (S.rollCtrl * qd + S.rollBase * ctrlScale);
     tq.y += -inp.roll * 0.45 * (S.yawCtrl * qd + S.yawBase * ctrlScale);
     tq.y += -inp.yaw * (S.yawCtrl * qd + S.yawBase * ctrlScale);
+    // Потерянное крыло: оставшееся тянет самолёт в крен на сторону без крыла
+    if (S.asym) tq.z += -S.asym * S.liftK * 2 * qd * cl * 0.55;
     // Аркадные помощники: выравнивание крена и координированный разворот
     if (!inp.roll && _u.y > 0) tq.z += -_l.y * S.levelK * ctrlScale * 2.2;
     tq.y += -_l.y * S.turnK * ctrlScale * Math.max(0, _u.y);
@@ -2567,7 +2578,7 @@ function groundContact(dt) {
     if (vy > crashVy || (_u.y < -0.2 && vy > 6) || (_f.y < -0.75 && vy > 12)) { P.pos.y = surf + clearance; endFlight('crash', 'Удар о землю'); return; }
     // Отскакивает только бескрылая «коробка» и самолёт на шасси;
     // крылатый без шасси садится на брюхо и пашет землю
-    if (vy > 4.5 && (S.gear || S.liftK === 0)) {
+    if (vy > 4.5 && (S.gear || S.liftK === 0 || S.damaged)) {
       // Отскок
       P.vel.y = vy * (S.gear ? 0.32 : 0.42);
       P.vel.x *= S.gear ? 0.9 : 0.78; P.vel.z *= S.gear ? 0.9 : 0.78;
@@ -2583,7 +2594,7 @@ function groundContact(dt) {
     P.onGround = true;
     P.lastImpact = vy;
     Sound.thud(S.gear ? 0.3 : 0.55, S.gear ? 0.25 : 0.45);
-    if (!S.gear && S.liftK > 0) {
+    if (!S.gear && S.liftK > 0 && !S.damaged) {
       P.bellyDown = true;
       for (let i = 0; i < 10; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 3, -0.3, (Math.random() - 0.5) * 3)), 0xa88a5c, 1.2, 1.1);
       P.w.set(0, 0, 0);
@@ -2593,7 +2604,7 @@ function groundContact(dt) {
   if (P.vel.y < 0) P.vel.y = 0;
   // Трение качения / скольжения
   const hv = Math.hypot(P.vel.x, P.vel.z);
-  const belly = !S.gear && S.liftK > 0;      // крылья мешают скользить: тормозим резко
+  const belly = !S.gear && S.liftK > 0 && !S.damaged;      // крылья мешают скользить: тормозим резко
   const fr = (S.gear ? S.rollFr : belly ? 20 + hv * 0.9 : 7.5) * dt;
   if (hv > 0) { const k = Math.max(0, hv - fr) / hv; P.vel.x *= k; P.vel.z *= k; }
   // Ложимся по склону: «верх» самолёта — нормаль рельефа, нос — по курсу движения
@@ -2652,23 +2663,72 @@ function hitPrim(p, pr, rad) {
   }
   return false;
 }
-const probes = [new V3(), new V3(), new V3(), new V3()];
+const probes = Array.from({ length: 7 }, () => new V3());
+// Датчики столкновений по частям: корпус и нос — крушение, крыло или хвост — только эта часть отваливается.
+// Возвращает null или что задето: 'body', 'wingL', 'wingR', 'tail'
+const PROBE_PART = ['body', 'body', 'wingL', 'wingR', 'wingL', 'wingR', 'tail'];
+const PROBE_R = [0.75, 0.5, 0.4, 0.4, 0.4, 0.4, 0.45];
+const probeOn = new Array(7).fill(false);
 function checkCollisions() {
   const pz = P.pos.z;
   _l.set(1, 0, 0).applyQuaternion(P.q);
   _f.set(0, 0, 1).applyQuaternion(P.q);
-  const half = S.span / 2 * 0.85;
+  const half = S.span / 2 * 0.85, dm = P.dmg || {};
   probes[0].copy(P.pos);
   probes[1].copy(P.pos).addScaledVector(_f, 1.5);
-  const nProbes = half > 0 ? 4 : 2;
-  if (half > 0) { probes[2].copy(P.pos).addScaledVector(_l, half); probes[3].copy(P.pos).addScaledVector(_l, -half); }
-  const radii = [0.75, 0.5, 0.4, 0.4];
+  probeOn[0] = probeOn[1] = true;
+  probeOn[2] = probeOn[4] = half > 0 && !dm.wingL;
+  probeOn[3] = probeOn[5] = half > 0 && !dm.wingR;
+  if (half > 0) {
+    probes[2].copy(P.pos).addScaledVector(_l, half); probes[3].copy(P.pos).addScaledVector(_l, -half);
+    probes[4].copy(P.pos).addScaledVector(_l, half * 0.5); probes[5].copy(P.pos).addScaledVector(_l, -half * 0.5);
+  }
+  probeOn[6] = save.lv.tail > 0 && !dm.tail;
+  probes[6].copy(P.pos).addScaledVector(_f, -2.0).addScaledVector(_u.set(0, 1, 0).applyQuaternion(P.q), 0.4);
+  let part = null;
   for (const o of obstacles) {
     if (o.zMin > pz + 12) break;
     if (o.zMax < pz - 12) continue;
-    for (const pr of o.prims) for (let i = 0; i < nProbes; i++) if (hitPrim(probes[i], pr, radii[i])) return true;
+    for (const pr of o.prims) for (let i = 0; i < 7; i++) {
+      if (!probeOn[i] || !hitPrim(probes[i], pr, PROBE_R[i])) continue;
+      if (PROBE_PART[i] === 'body') return 'body';
+      part = part || PROBE_PART[i];
+    }
   }
-  return false;
+  return part;
+}
+// Часть отвалилась: модель отделяется и падает обломком, характеристики самолёта пересчитываются
+function breakPart(part) {
+  if (!P.dmg) P.dmg = {};
+  if (P.dmg[part]) return;
+  P.dmg[part] = true;
+  const u = plane.userData, obj = part === 'tail' ? u.tail : u.wing[part === 'wingL' ? 1 : -1];
+  if (obj && obj.parent) {
+    plane.updateMatrixWorld(true);
+    scene.attach(obj);
+    _l.set(1, 0, 0).applyQuaternion(P.q);
+    const side = part === 'wingL' ? 1 : part === 'wingR' ? -1 : 0;
+    const v = P.vel.clone().multiplyScalar(0.55).addScaledVector(_l, side * 6).add(new V3((Math.random() - 0.5) * 3, 3 + Math.random() * 3, 0));
+    particles.push({ m: obj, vel: v, life: 6, max: 6, grow: 0, grav: G, spin: new V3(Math.random() * 6, Math.random() * 6, (side || 1) * 4), debris: true, keep: true });
+  }
+  for (let i = 0; i < 8; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 3)), i % 2 ? 0x777777 : 0xffb050, 0.7, 0.9);
+  Sound.thud(0.6, 0.5);
+  toast({ wingL: 'Отвалилось левое крыло!', wingR: 'Отвалилось правое крыло!', tail: 'Отвалился хвост!' }[part]);
+  applyDamage();
+}
+function applyDamage() {
+  const d = P.dmg || {}, lv = { ...save.lv };
+  const bothWings = d.wingL && d.wingR;
+  if (bothWings) lv.wings = 0;
+  if (d.tail) lv.tail = 0;
+  const s = computeStats(lv);
+  if ((d.wingL || d.wingR) && !bothWings) {
+    // одно крыло: половина подъёмной силы, крен тянет в сторону потерянного крыла
+    s.liftK *= 0.5; s.rollCtrl *= 0.4; s.rollBase *= 0.4; s.levelK = 0; s.turnK *= 0.5; s.align *= 0.5;
+    s.asym = d.wingL ? 1 : -1;
+  }
+  s.damaged = true;
+  S = s;
 }
 
 const COIN_PICK_R = COIN_R * 1.35;     // зона подбора чуть больше самой монеты
@@ -2790,6 +2850,7 @@ function updateTrajectory() {
 }
 
 function resetRun() {
+  if (P.dmg) { P.dmg = null; rebuildPlane(); }      // после полёта с поломками собираем самолёт заново
   for (const c of coins) { c.taken = false; c.anim = 1; }
   for (const r of rings) { r.taken = false; r.noseOk = null; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
   clearFurrows();
@@ -3365,7 +3426,11 @@ function frame(now) {
         physicsStep(STEP, inp);
         P.time += STEP;
         P.maxZ = Math.max(P.maxZ, P.pos.z);
-        if (!P.ended && checkCollisions()) endFlight('crash', 'Столкновение с препятствием');
+        if (!P.ended) {
+          const hit = checkCollisions();
+          if (hit === 'body') endFlight('crash', 'Столкновение с препятствием');
+          else if (hit) breakPart(hit);
+        }
         if (!P.ended && P.pos.z >= FINISH_Z && !P.finished) { P.finished = true; Sound.blip(523, 0.2); setTimeout(() => Sound.blip(659, 0.2), 150); setTimeout(() => Sound.blip(784, 0.4), 300); endFlight('finish'); }
         if (!P.ended && (P.pos.z < -150 || Math.abs(P.pos.x) > 300)) endFlight('out');
         acc -= STEP;
@@ -3427,4 +3492,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
