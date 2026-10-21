@@ -3092,6 +3092,7 @@ $('set-title').addEventListener('click', () => {
 document.querySelectorAll('#dev [data-money]').forEach((b) => b.addEventListener('click', () => {
   save.money += +b.dataset.money; persist(); renderShop(); toast(`+${(+b.dataset.money).toLocaleString('ru-RU')}`);
 }));
+$('dev-money-zero').addEventListener('click', () => { save.money = 0; persist(); renderShop(); toast('Баланс обнулён'); });
 $('dev-max').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
