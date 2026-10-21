@@ -174,6 +174,10 @@
     background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.on { background: rgba(255, 120, 30, .95); color: #fff; box-shadow: 0 0 0 4px rgba(255,200,80,.55), 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.dim { opacity: .35; }
+  #fbtn { position: absolute; left: 34px; bottom: 160px; width: 92px; height: 92px; border-radius: 50%; line-height: 1.1;
+    background: rgba(231, 76, 60, .82); color: #fff; font-size: 26px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #fbtn small { display: block; font-size: 12px; font-weight: 700; }
+  #fbtn.on { background: rgba(255, 70, 50, 1); box-shadow: 0 0 0 4px rgba(255,160,120,.6), 0 4px 16px rgba(0,0,0,.3); }
   /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
   body.touch #hud-fuel { display: none; }   /* на телефоне секунды топлива показаны прямо на кнопке мотора */
   #tbtn { line-height: 1.15; }
@@ -202,6 +206,7 @@
     #stick { width: 170px; height: 170px; bottom: 10px; }
     #knob { width: 72px; height: 72px; }
     #tbtn { width: 100px; height: 100px; bottom: 14px; }
+    #fbtn { width: 80px; height: 80px; left: 128px; bottom: 20px; font-size: 22px; }
   }
   /* ---------- пауза ---------- */
   #pause-btn { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; pointer-events: auto;
@@ -243,6 +248,7 @@
     <div class="row"><span>Скорость</span><b id="h-speed">0 км/ч</b></div>
     <div class="row"><span>Высота</span><b id="h-alt">0 м</b></div>
     <div class="row"><span>Дистанция</span><b id="h-dist">0 м</b></div>
+    <div class="row"><span>Мишени 🎯</span><b id="h-tg">0</b></div>
   </div>
   <div id="hud-progress" class="hud-box">
     <div class="prog-track"><div class="prog-fill" id="h-prog"></div><div class="prog-best" id="h-best"></div></div>
@@ -257,7 +263,7 @@
     <kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd> — тангаж<br>
     <kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> — крен и поворот<br>
     <kbd>Q</kbd><kbd>E</kbd> — руль направления<br>
-    <kbd>Пробел</kbd> — двигатель · <kbd>Esc</kbd> — пауза · <kbd>R</kbd> — закончить полёт
+    <kbd>F</kbd> / мышь — огонь · <kbd>Пробел</kbd> — двигатель<br><kbd>Esc</kbd> — пауза · <kbd>R</kbd> — закончить полёт
   </div>
 </div>
 <div class="safe"><button id="pause-btn" class="hidden" aria-label="Пауза">❚❚</button></div>
@@ -275,6 +281,7 @@
 <div id="touch" class="safe hidden">
   <div id="stick"><div id="knob"></div></div>
   <button id="tbtn">Мотор</button>
+  <button id="fbtn">🎯<small>Огонь</small></button>
 </div>
 
 <div class="safe">

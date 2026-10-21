@@ -75,13 +75,16 @@ const UPG = {
   gear: { icon: '🛞', name: 'Шасси', costs: [180, 900, 4500],    // каждое следующее в 5 раз дороже
     levels: ['Посадка на брюхо', 'Колёса', 'Хромированное шасси', 'Золотое шасси'],
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
+  gun: { icon: '🔫', name: 'Оружие', costs: priceList(10, 250, 1.35),
+    levels: ['Нет оружия', 'Пугач', 'Пулемёт', 'Спаренный пулемёт', 'Крыльевые пулемёты', 'Пушка', 'Спаренные пушки', 'Лазер', 'Двойной лазер', 'Плазмомёт', 'Звёздный бластер'],
+    desc: 'Стреляй по мишеням на трассе и получай за них монеты. Чем выше уровень, тем чаще и сильнее выстрелы, а снаряды сами доворачивают к цели.' },
 };
-const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear'];
+const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear', 'gun'];
 
 const SAVE_KEY = 'slingplane-save-v1';
 const defaultSave = () => ({
   ver: 3, money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
-  lv: { sling: 0, wings: 0, tail: 0, engine: 0, fuel: 0, aero: 0, gear: 0 },
+  lv: { sling: 0, wings: 0, tail: 0, engine: 0, fuel: 0, aero: 0, gear: 0, gun: 0 },
   level: 0, unlocked: 0, lvBest: {}, lvDone: {},      // выбранный мир, последний открытый, рекорды и пройденные
 });
 let save = defaultSave();
@@ -158,6 +161,17 @@ function computeStats(L) {
   };
 }
 let S = computeStats(save.lv);
+// Оружие: скорострельность, урон, скорость снаряда и самонаведение растут с уровнем.
+// Ступени: пулемёты (1–4) → пушки (5–6) → лазеры (7–8) → плазма (9–10)
+function gunStats(g) {
+  if (g <= 0) return null;
+  const k = g - 1;
+  return {
+    rate: 5 + k, dmg: 1 + k * 0.4, speed: 170 + g * 15, life: 1.3,
+    homing: [0, 0, 0, 0.6, 0.9, 1.3, 1.8, 2.4, 3.0, 3.8][k],
+    tier: g <= 4 ? 0 : g <= 6 ? 1 : g <= 8 ? 2 : 3,
+  };
+}
 
 // =====================================================================
 //  Рендер, сцена, свет
@@ -1745,8 +1759,8 @@ function clearLevel() {
     for (const m of ms) if (!keepMats.has(m)) { m.map?.dispose?.(); m.dispose(); }
   });
   levelRoot.clear();
-  obstacles.length = 0; movers.length = 0; coins.length = 0; rings.length = 0; treeList.length = 0;
-  clearFurrows();
+  obstacles.length = 0; movers.length = 0; coins.length = 0; rings.length = 0; treeList.length = 0; targets.length = 0;
+  clearFurrows(); clearBullets();
 }
 let levelIdx = -1;
 function loadLevel(i) {
@@ -1764,6 +1778,7 @@ function loadLevel(i) {
   buildTrees();
   buildCoins();
   obstacles.sort((a, b) => a.zMin - b.zMin);
+  buildTargets(i);
   fixRings();
   mergeStatic(statics);
   mergeStatic(cloudRoot, 600);
@@ -2205,6 +2220,33 @@ function buildPlaneMesh(L) {
     g.add(mesh(new THREE.BoxGeometry(0.05, 0.3, 0.05), G.strut, 0, -0.4, -1.8));
     g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10).rotateZ(Math.PI / 2), G.tire, 0, -0.55, -1.8));
   }
+  // --- Оружие ---
+  // Стволы — по ступеням: пулемёт в носу → под крыльями → пушки → лазеры → плазма.
+  // Дульные точки (muzzles) — пустые объекты на концах стволов; крыльевые уходят вместе с крылом
+  const muzzles = [];
+  if (L.gun > 0) {
+    const gl = L.gun, gt = gunStats(gl).tier;
+    const gunMat = [mDark, std(0x4a4f57, { metalness: 0.36, roughness: 0.35 }), std(0xe6ebf0, { metalness: 0.36, roughness: 0.2 }), std(0x2a1d4a, { metalness: 0.3, roughness: 0.3 })][gt];
+    const tipMat = [mDark, std(0xd4a017, { metalness: 0.36, roughness: 0.25 }), std(0xff3a3a, glow(0xff2020, 1.2)), std(0x7af0ff, glow(0x40d8ff, 1.4))][gt];
+    const barrel = (x, y, z, len, r, side) => {
+      const grp = new THREE.Group(); grp.position.set(x, y, z);
+      if (side !== undefined) grp.userData.side = side;
+      grp.add(mesh(new THREE.CylinderGeometry(r, r, len, 8).rotateX(Math.PI / 2), gunMat, 0, 0, len / 2));
+      if (gt === 0) for (let i = 0; i < 3; i++) grp.add(mesh(new THREE.CylinderGeometry(r * 1.5, r * 1.5, 0.05, 8).rotateX(Math.PI / 2), mDark, 0, 0, len * (0.3 + i * 0.2), false));   // рёбра охлаждения
+      if (gt === 1) grp.add(mesh(new THREE.CylinderGeometry(r * 1.6, r * 1.3, 0.25, 10).rotateX(Math.PI / 2), tipMat, 0, 0, len));          // дульный тормоз
+      if (gt === 2) { grp.add(mesh(new THREE.BoxGeometry(r * 3, r * 3, len * 0.5), gunMat, 0, 0, len * 0.2)); grp.add(mesh(new THREE.SphereGeometry(r * 1.2, 8, 6), tipMat, 0, 0, len, false)); }
+      if (gt === 3) { grp.add(mesh(new THREE.TorusGeometry(r * 2, r * 0.6, 6, 12), tipMat, 0, 0, len * 0.55, false)); grp.add(mesh(new THREE.TorusGeometry(r * 2, r * 0.6, 6, 12), tipMat, 0, 0, len * 0.85, false)); grp.add(mesh(new THREE.SphereGeometry(r * 1.4, 10, 8), tipMat, 0, 0, len, false)); }
+      const mz = new THREE.Object3D(); mz.position.set(0, 0, len + 0.2); grp.add(mz); muzzles.push(mz);
+      g.add(grp);
+    };
+    const wx = W > 0 ? Math.max(1.35, half * 0.42) : 0.62, wy = W > 0 ? -0.38 : -0.25;
+    const len = [1.1, 1.3, 1.2, 1.3][gt], r = [0.06, 0.1, 0.07, 0.08][gt];
+    if (gl <= 2) barrel(0.18, bodyR * 0.55, 1.2, gl === 1 ? 0.9 : 1.2, 0.055);                     // одиночный в носу
+    else if (gl === 3) for (const sx of [-1, 1]) barrel(sx * 0.2, bodyR * 0.55, 1.2, 1.2, 0.055);     // спаренный
+    else for (const sx of [-1, 1]) barrel(sx * wx, wy, 0.35, len, r, W > 0 ? sx : undefined);       // под крыльями
+    if (gl === 6 || gl === 8 || gl >= 9) for (const sx of [-1, 1]) barrel(sx * 0.3, -bodyR * 0.75, 1.1, len * 0.8, r * 0.9);   // вторая пара под носом
+    if (gl >= 10) for (const sx of [-1, 1]) barrel(sx * (W > 0 ? Math.max(2.1, half * 0.7) : 0.7), wy - 0.05, 0.15, len * 0.8, r * 0.9, W > 0 ? sx : undefined);
+  }
   // Крылья — отдельные части: в группу стороны уходит само крыло и всё, что висит на нём (моторы, баки)
   const wing = {};
   if (W > 0) for (const sx of [-1, 1]) {
@@ -2212,7 +2254,7 @@ function buildPlaneMesh(L) {
     for (const ch of [...g.children]) if (ch.userData.side === sx || (!ch.userData.part && ch.userData.side === undefined && ch.position.x * sx > 0.95)) { g.remove(ch); wg.add(ch); }
     g.add(wg);
   }
-  g.userData = { span, spinners, flames, blurs, wing, tail: tg, paint: at === -1 ? 0xb08a5a : paint };
+  g.userData = { span, spinners, flames, blurs, wing, tail: tg, muzzles, paint: at === -1 ? 0xb08a5a : paint };
   return g;
 }
 function animateEngines(dt, spin, on) {
@@ -2281,6 +2323,36 @@ const Sound = {
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
       o.connect(g).connect(this.master); o.start(t0 + start); o.stop(t0 + start + dur + 0.02);
     }
+  },
+  // Выстрел: пулемёт — сухой щелчок, пушка — глухой удар, лазер — «пиу», плазма — бульк вниз
+  shot(tier) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    if (tier <= 1) {
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = tier ? 500 : 1400; f.Q.value = 0.8;
+      const dur = tier ? 0.12 : 0.05;
+      g.gain.setValueAtTime(tier ? 0.22 : 0.12, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      s.connect(f).connect(g).connect(this.master); s.start(t0, Math.random()); s.stop(t0 + dur);
+    } else {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = tier === 2 ? 'sawtooth' : 'sine';
+      o.frequency.setValueAtTime(tier === 2 ? 1800 : 700, t0); o.frequency.exponentialRampToValueAtTime(tier === 2 ? 300 : 150, t0 + 0.12);
+      g.gain.setValueAtTime(0.05, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.13);
+      o.connect(g).connect(this.master); o.start(t0); o.stop(t0 + 0.14);
+    }
+  },
+  // Мишень разбита: хлопок и весёлое «тирлинь» вверх
+  pop() {
+    if (!this.ctx) return;
+    this.thud(0.35, 0.25);
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    [784, 1047, 1568].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.setValueAtTime(0.1, t0 + i * 0.06); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.06 + 0.2);
+      o.connect(g).connect(this.master); o.start(t0 + i * 0.06); o.stop(t0 + i * 0.06 + 0.22);
+    });
   },
   thud(vol = 0.6, dur = 0.5) {
     if (!this.ctx) return;
@@ -2409,6 +2481,298 @@ function updateParticles(dt) {
 }
 
 // =====================================================================
+//  Оружие и мишени
+// =====================================================================
+
+// Мишени в каждом мире свои, в стиле мира: щиты-«яблочки», кувшины, ледяные кристаллы, маски тики,
+// дроны, банки, пиньяты, огненные шары, шары-мишени и звёздные фонарики.
+// Столкновений у мишеней нет: в них только стреляют
+const targets = [];
+const TARGET_STYLES = [
+  { kind: 'board', cols: [0xe74c3c, 0xffffff], post: 0x8a5a2b },
+  { kind: 'pot', cols: [0xd9793a, 0x5a2e1a, 0xf2d29a], post: 0xc9a46a },
+  { kind: 'crystal', cols: [0x9fe3ff, 0xe8f8ff, 0x3aa0e0], post: 0xdbe7f2 },
+  { kind: 'tiki', cols: [0x2fae5a, 0xffd23a, 0xa0522d], post: 0x7a4a24 },
+  { kind: 'drone', cols: [0x34495e, 0xff4f4f, 0xffffff], air: true },
+  { kind: 'cans', cols: [0xc0c6cc, 0xe74c3c, 0x3a7bd5], post: 0x9b6a4a },
+  { kind: 'pinata', cols: [0xff4f8b, 0xffd23a, 0x4fc3f7, 0x7ee36a], post: 0xfaf6f0 },
+  { kind: 'fireorb', cols: [0x2a2226, 0xff7a1a, 0xffd060], air: true },
+  { kind: 'skyballoon', cols: [0xff6a8a, 0xffffff, 0x9b59b6], air: true },
+  { kind: 'lantern', cols: [0x7af0ff, 0xc9a0ff, 0xfff6b0], air: true },
+];
+function bullseye(r, colA, colB, rings = 4, th = 0.3) {
+  const grp = new THREE.Group();
+  for (let i = 0; i < rings; i++) {
+    const rr = r * (1 - i / rings);
+    grp.add(mesh(new THREE.CylinderGeometry(rr, rr, th, 24).rotateX(Math.PI / 2), std(i % 2 ? colB : colA, { roughness: 0.5 }), 0, 0, -i * 0.04, false));
+  }
+  return grp;
+}
+// Сам «предмет» мишени, центр — в начале координат; возвращает радиус попадания
+function targetBody(st, grp) {
+  const [a, b, c, d] = st.cols;
+  switch (st.kind) {
+    case 'board': {
+      grp.add(bullseye(2, a, b, 5));
+      grp.add(mesh(new THREE.TorusGeometry(2, 0.16, 6, 24), std(0x8a5a2b), 0, 0, 0.05));
+      return 2.1;
+    }
+    case 'pot': {
+      const pts = [];
+      for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new THREE.Vector2(0.5 + 1.1 * Math.sin(Math.PI * (0.1 + t * 0.75)) + (t > 0.85 ? (t - 0.85) * 2 : 0), -1.6 + t * 3.2)); }
+      grp.add(mesh(new THREE.LatheGeometry(pts, 14), std(a, { side: THREE.DoubleSide })));
+      for (const y of [-0.4, 0.5]) grp.add(mesh(new THREE.TorusGeometry(y < 0 ? 1.55 : 1.45, 0.09, 5, 20).rotateX(Math.PI / 2), std(b), 0, y, 0, false));
+      grp.add(mesh(new THREE.TorusGeometry(1.2, 0.1, 5, 20).rotateX(Math.PI / 2), std(c), 0, 0.05, 0, false));
+      return 1.8;
+    }
+    case 'crystal': {
+      const m = std(a, { emissive: c, emissiveIntensity: 0.35, roughness: 0.2, metalness: 0.1 });
+      grp.add(mesh(new THREE.OctahedronGeometry(1.7, 0).scale(0.8, 1.3, 0.8), m));
+      for (let i = 0; i < 4; i++) { const sm = mesh(new THREE.OctahedronGeometry(0.7, 0).scale(0.6, 1.4, 0.6), std(b, { emissive: c, emissiveIntensity: 0.25 })); sm.position.set(Math.cos(i * 1.57) * 1.3, -0.6, Math.sin(i * 1.57) * 1.3); sm.rotation.z = Math.cos(i * 1.57) * -0.6; sm.rotation.x = Math.sin(i * 1.57) * 0.6; grp.add(sm); }
+      return 1.9;
+    }
+    case 'tiki': {
+      grp.add(bullseye(1.9, a, b, 4));
+      grp.add(mesh(new THREE.TorusGeometry(1.9, 0.2, 6, 20), std(c), 0, 0, 0.05));
+      for (let i = -2; i <= 2; i++) { const f = mesh(new THREE.ConeGeometry(0.28, 1.6, 5), std(i % 2 ? a : 0xe74c3c), Math.sin(i * 0.4) * 2.3, 1.9 + Math.cos(i * 0.4) * 0.6, 0.1); f.rotation.z = -i * 0.4; grp.add(f); }
+      return 2.1;
+    }
+    case 'drone': {
+      grp.add(mesh(new THREE.BoxGeometry(1.6, 0.5, 1.6), std(a, { roughness: 0.4 })));
+      const face = bullseye(0.9, b, c, 3, 0.15); face.position.set(0, 0, -0.85); grp.add(face);
+      for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        grp.add(mesh(new THREE.BoxGeometry(0.15, 0.12, 1.2).rotateY(Math.atan2(sx, sz)), std(a), sx * 0.95, 0.15, sz * 0.95));
+        const rot = mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.04, 14), std(0xdfe6ee, { transparent: true, opacity: 0.55 }), sx * 1.35, 0.3, sz * 1.35, false);
+        rot.userData.spin = true; grp.add(rot);
+      }
+      grp.add(mesh(new THREE.SphereGeometry(0.15, 8, 6), std(b, glow(b, 1.2)), 0, 0.3, -0.7, false));
+      return 1.9;
+    }
+    case 'cans': {
+      const can = (x, y, col) => {
+        grp.add(mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.1, 14), std(a, { metalness: 0.36, roughness: 0.3 }), x, y, 0));
+        grp.add(mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.55, 14), std(col), x, y, 0, false));
+      };
+      can(-0.55, -0.55, b); can(0.55, -0.55, c); can(0, 0.55, b);
+      return 1.4;
+    }
+    case 'pinata': {
+      grp.add(mesh(new THREE.IcosahedronGeometry(1.1, 0), std(a)));
+      const cols = [a, b, c, d, b];
+      for (let i = 0; i < 5; i++) {
+        const ang = i * Math.PI * 2 / 5;
+        const sp = mesh(new THREE.ConeGeometry(0.55, 1.6, 6), std(cols[i]), Math.sin(ang) * 1.5, Math.cos(ang) * 1.5, 0);
+        sp.rotation.z = -ang; grp.add(sp);
+        const tas = mesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), std(cols[(i + 2) % 5]), Math.sin(ang) * 2.4, Math.cos(ang) * 2.4 - 0.4, 0, false); grp.add(tas);
+      }
+      return 2.1;
+    }
+    case 'fireorb': {
+      grp.add(mesh(new THREE.IcosahedronGeometry(1.5, 1), std(a, { roughness: 0.3, metalness: 0.2 })));
+      grp.add(mesh(new THREE.IcosahedronGeometry(1.62, 0), new THREE.MeshBasicMaterial({ color: b, wireframe: true, transparent: true, opacity: 0.9 })));
+      grp.add(mesh(new THREE.SphereGeometry(2.1, 14, 10), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.18, depthWrite: false }), 0, 0, 0, false));
+      return 1.9;
+    }
+    case 'skyballoon': {
+      const env = mesh(stripedSphere(1.7, a, b, 5), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.6 }));
+      env.scale.set(1, 1.2, 1); grp.add(env);
+      const face = bullseye(1.0, 0xe74c3c, 0xffffff, 3, 0.15); face.position.set(0, 0.1, -1.62); grp.add(face);
+      grp.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8, 4), std(0xffffff), 0, -2.9, 0, false));
+      grp.add(mesh(new THREE.ConeGeometry(0.25, 0.4, 8).rotateX(Math.PI), std(c), 0, -2.05, 0, false));
+      return 2.0;
+    }
+    case 'lantern': {
+      const m = std(a, { emissive: a, emissiveIntensity: 0.9, roughness: 0.3 });
+      grp.add(mesh(new THREE.OctahedronGeometry(1.2, 0).scale(1, 1.5, 1), m));
+      for (let i = 0; i < 4; i++) { const ray = mesh(new THREE.ConeGeometry(0.3, 1.4, 4), std(b, glow(b, 0.8))); const ang = i * Math.PI / 2 + Math.PI / 4; ray.position.set(Math.sin(ang) * 1.3, Math.cos(ang) * 1.3, 0); ray.rotation.z = -ang; grp.add(ray); }
+      grp.add(mesh(new THREE.SphereGeometry(2.2, 14, 10), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.14, depthWrite: false }), 0, 0, 0, false));
+      return 1.9;
+    }
+  }
+  return 2;
+}
+function targetFree(c, r) {
+  for (const o of obstacles) {
+    if (o.zMin > c.z + r + 6 || o.zMax < c.z - r - 6) continue;
+    for (const pr of o.prims) if (hitPrim(c, pr, r + 4)) return false;
+  }
+  return true;
+}
+function buildTargets(idx) {
+  const st = TARGET_STYLES[idx % TARGET_STYLES.length];
+  const R = rng(LVL.seed * 7 + 991);
+  const n = 12 + idx * 2, z0 = 220, z1 = FINISH_Z - 140;
+  for (let k = 0; k < n; k++) {
+    let placed = false;
+    for (let tries = 0; tries < 14 && !placed; tries++) {
+      const z = z0 + (z1 - z0) * (k + 0.2 + R() * 0.6) / n;
+      const x = roadX(z) * 0.4 + (R() * 2 - 1) * Math.max(20, VALLEY - 40);
+      const gy = terrainH(x, z);
+      const air = st.air || nearWater(z, 12) || R() < 0.4;
+      const post = air ? 0 : 3.5 + R() * 2.5;
+      const y = air ? Math.max(gy, WATER_Y) + 9 + R() * 22 : gy + post + 2.1;
+      const c = new V3(x, y, z);
+      if (!targetFree(c, 2.2)) continue;
+      if (!air && !targetFree(new V3(x, gy + post * 0.5, z), 0.6)) continue;
+      const grp = new THREE.Group();
+      const body = new THREE.Group();
+      const r = targetBody(st, body);
+      grp.add(body);
+      grp.position.copy(c);
+      world.add(grp);
+      if (!air) {
+        // подставка: столб с перекладиной, у банок — каменный уступ
+        const pm = std(st.post);
+        const stand = new THREE.Group();
+        if (st.kind === 'cans' || st.kind === 'pot') {
+          stand.add(mesh(jitter(new THREE.CylinderGeometry(1.4, 1.9, post + 0.5, 7, 2), 0.25, k + 3), pm, 0, (post + 0.5) / 2 - 0.4, 0));
+          body.position.y = st.kind === 'cans' ? -0.6 : -0.4;
+        } else {
+          stand.add(mesh(new THREE.CylinderGeometry(0.18, 0.24, post + 1, 6), pm, 0, (post + 1) / 2 - 0.5, 0.25));
+          stand.add(mesh(new THREE.BoxGeometry(1.2, 0.18, 0.18), pm, 0, post * 0.55, 0.25));
+        }
+        stand.position.set(x, gy, z);
+        world.add(stand);
+      }
+      targets.push({ grp, body, c, base: c.clone(), r, air, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
+      placed = true;
+    }
+  }
+  resetTargets();
+}
+function resetTargets() {
+  for (const t of targets) { t.dead = false; t.hp = t.maxHp; t.grp.visible = true; t.flash = 0; t.body.scale.setScalar(1); }
+}
+function updateTargets(time, dt) {
+  for (const t of targets) {
+    if (t.dead) continue;
+    if (t.air) {
+      t.c.y = t.base.y + Math.sin(time * 1.1 + t.ph) * 1.2;
+      t.grp.position.y = t.c.y;
+      t.body.rotation.y = Math.sin(time * 0.7 + t.ph) * 0.5;
+    } else t.body.rotation.z = Math.sin(time * 1.6 + t.ph) * 0.06;
+    if (t.spin) for (const ch of t.body.children) if (ch.userData.spin) ch.rotation.y += dt * 30;
+    if (t.flash > 0) { t.flash = Math.max(0, t.flash - dt); t.body.scale.setScalar(1 + t.flash * 1.6); }
+  }
+}
+const SHARD_GEO = new THREE.TetrahedronGeometry(0.45, 0);
+function shatterTarget(t) {
+  t.dead = true; t.grp.visible = false;
+  for (let i = 0; i < 16; i++) {
+    const m = new THREE.Mesh(i % 3 ? SHARD_GEO : debrisGeo, std(t.cols[i % t.cols.length]));
+    m.position.copy(t.c); m.scale.setScalar(0.5 + Math.random() * 0.8);
+    scene.add(m);
+    const v = new V3((Math.random() - 0.5) * 14, 2 + Math.random() * 10, (Math.random() - 0.5) * 14).addScaledVector(P.vel, 0.15);
+    particles.push({ m, vel: v, life: 1.6 + Math.random(), max: 2.6, grow: 0, grav: G, spin: new V3(Math.random() * 10, Math.random() * 10, 0), debris: true });
+  }
+  spawnSparks(t.c); spawnSparks(t.c);
+  for (let i = 0; i < 4; i++) spawnPuff(t.c.clone().add(new V3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)), 0xffffff, 0.9, 0.7);
+  const prize = targetPrize(levelIdx);
+  P.targets++; P.targetCoins += prize;
+  Sound.pop();
+  toast(`🎯 +${prize}`);
+}
+const targetPrize = (i) => 25 + i * 10;
+
+// --- Снаряды ---
+const bullets = [];
+// Снаряд = светящееся пятно (видно и сзади, когда пуля летит прямо от камеры) + вытянутый след
+const glowTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.3, 'rgba(255,255,255,.8)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(cv);
+})();
+const BULLET_LOOK = [[0xffe066, 0.12, 3, 1.3], [0xff9a2a, 0.22, 2.4, 1.8], [0xff3a3a, 0.13, 7, 1.6], [0x7af0ff, 0.3, 2.4, 2.4]].map(([color, r, len, glowS]) => ({
+  geo: new THREE.CylinderGeometry(r, r, len, 6).rotateX(Math.PI / 2),
+  mat: new THREE.MeshBasicMaterial({ color, fog: false }),
+  glow: new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+  glowS,
+}));
+const _bz = new V3(0, 0, 1), _bp = new V3(), _bd = new V3();
+const gun = { cd: 0, next: 0 };
+function isAttached(o) { while (o) { if (o === plane) return true; o = o.parent; } return false; }
+function fireGun(dt, firing) {
+  const gs = gunStats(save.lv.gun);
+  gun.cd -= dt;
+  if (!gs || !firing) { gun.cd = Math.max(0, gun.cd); return; }
+  // при низком FPS за кадр может вылететь несколько снарядов — скорострельность не зависит от кадров
+  while (gun.cd <= 0) { gun.cd += 1 / gs.rate; shoot(gs); }
+}
+function shoot(gs) {
+  const mz = plane.userData.muzzles.filter(isAttached);
+  plane.updateMatrixWorld(true);
+  _f.set(0, 0, 1).applyQuaternion(P.q);
+  if (mz.length) mz[gun.next++ % mz.length].getWorldPosition(_bp);
+  else _bp.copy(P.pos).addScaledVector(_f, 2.4);
+  // небольшой разброс, снаряд наследует скорость самолёта
+  _bd.copy(_f).add(_tmp2.set((Math.random() - 0.5) * 0.012, (Math.random() - 0.5) * 0.012, 0)).normalize();
+  const look = BULLET_LOOK[gs.tier];
+  const m = new THREE.Group();
+  m.add(new THREE.Mesh(look.geo, look.mat));
+  const sp = new THREE.Sprite(look.glow); sp.scale.setScalar(look.glowS); m.add(sp);
+  m.position.copy(_bp);
+  scene.add(m);
+  const vel = _bd.clone().multiplyScalar(gs.speed).addScaledVector(P.vel, 1);
+  m.quaternion.setFromUnitVectors(_bz, _bd);
+  bullets.push({ m, vel, life: gs.life, prev: _bp.clone(), dmg: gs.dmg, homing: gs.homing, speed: vel.length() });
+  Sound.shot(gs.tier);
+}
+function updateBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.life -= dt;
+    // самонаведение: доворачиваем к ближайшей живой мишени впереди
+    if (b.homing > 0) {
+      let best = null, bestD = 1e9;
+      _bd.copy(b.vel).normalize();
+      for (const t of targets) {
+        if (t.dead) continue;
+        _tmp2.copy(t.c).sub(b.m.position);
+        const d = _tmp2.length();
+        if (d > 160 || d < 1) continue;
+        if (_tmp2.dot(_bd) / d < 0.9) continue;          // в конусе ~25°
+        if (d < bestD) { bestD = d; best = t; }
+      }
+      if (best) {
+        _tmp2.copy(best.c).sub(b.m.position).normalize();
+        _bd.lerp(_tmp2, Math.min(1, b.homing * dt)).normalize();
+        b.vel.copy(_bd).multiplyScalar(b.speed);
+        b.m.quaternion.setFromUnitVectors(_bz, _bd);
+      }
+    }
+    b.prev.copy(b.m.position);
+    b.m.position.addScaledVector(b.vel, dt);
+    const p = b.m.position;
+    let hit = null;
+    for (const t of targets) {
+      if (t.dead || Math.abs(t.c.z - p.z) > 60) continue;
+      if (distToSeg(t.c, b.prev, p) < t.r + 0.25) { hit = t; break; }
+    }
+    let gone = b.life <= 0;
+    if (hit) {
+      hit.hp -= b.dmg; hit.flash = 0.1;
+      spawnPuff(p, 0xffffff, 0.35, 0.3);
+      if (hit.hp <= 0) shatterTarget(hit);
+      else Sound.blip(900, 0.05, 'square', 0.04);
+      gone = true;
+    } else if (p.y < terrainH(p.x, p.z) || (p.y < WATER_Y && waterAt(p.z))) {
+      spawnPuff(p, 0xc9b48a, 0.4, 0.5);
+      gone = true;
+    } else {
+      for (const o of obstacles) {
+        if (o.zMin > p.z + 2) break;
+        if (o.zMax < p.z - 2) continue;
+        if (o.prims.some((pr) => hitPrim(p, pr, 0.1))) { spawnPuff(p, 0xdddddd, 0.35, 0.4); gone = true; break; }
+      }
+    }
+    if (gone) { scene.remove(b.m); bullets.splice(i, 1); }
+  }
+}
+function clearBullets() { for (const b of bullets) scene.remove(b.m); bullets.length = 0; gun.cd = 0; }
+
+// =====================================================================
 //  Физика полёта
 // =====================================================================
 
@@ -2430,7 +2794,8 @@ function liftCoef(a) {
 }
 
 // Сенсорное управление: джойстик слева (тангаж/крен), кнопка справа (двигатель / натяжение)
-const touch = { x: 0, y: 0, btn: false };
+const touch = { x: 0, y: 0, btn: false, fire: false };
+let mouseFire = false;
 function input() {
   const up = keys.KeyW || keys.ArrowUp, down = keys.KeyS || keys.ArrowDown;
   let pitch = clamp((up ? 1 : 0) - (down ? 1 : 0) - touch.y, -1, 1);
@@ -2438,7 +2803,8 @@ function input() {
   const roll = clamp((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + touch.x, -1, 1);
   const yaw = (keys.KeyE ? 1 : 0) - (keys.KeyQ ? 1 : 0);
   const throttle = !!(keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.btn);
-  return { pitch, roll, yaw, throttle };
+  const fire = !!(keys.KeyF || keys.KeyJ || touch.fire || mouseFire);
+  return { pitch, roll, yaw, throttle, fire };
 }
 
 function physicsStep(dt, inp) {
@@ -2528,8 +2894,29 @@ function physicsStep(dt, inp) {
   // Интеграция движения
   P.vel.addScaledVector(_F, dt);
   P.pos.addScaledVector(P.vel, dt);
+  mountainWind(dt);
 
   groundContact(dt);
+}
+
+// В горы врезаться нельзя: у края долины встречный ветер тормозит боковой снос
+// и плавно разворачивает самолёт обратно, а за невидимую границу его не пускает
+const _upY = new V3(0, 1, 0);
+function mountainWind(dt) {
+  const lim = VALLEY - 6, ax = Math.abs(P.pos.x), sx = Math.sign(P.pos.x);
+  if (ax < lim - 35) return;
+  const k = clamp((ax - (lim - 35)) / 35, 0, 1);
+  if (P.vel.x * sx > 0) P.vel.x -= sx * Math.min(P.vel.x * sx, k * k * 45 * dt);
+  if (!P.onGround) {
+    _f.set(0, 0, 1).applyQuaternion(P.q);
+    if (_f.x * sx > -0.35) {
+      const ang = -sx * k * 1.4 * dt;
+      _dq.setFromAxisAngle(_upY, ang);
+      P.q.premultiply(_dq).normalize();
+      P.vel.applyQuaternion(_dq);
+    }
+  }
+  if (ax > lim) { P.pos.x = sx * lim; if (P.vel.x * sx > 0) P.vel.x = 0; }
 }
 
 // Борозда от посадки на брюхо: тёмные полосы взрытой земли за самолётом
@@ -2854,7 +3241,8 @@ function resetRun() {
   for (const c of coins) { c.taken = false; c.anim = 1; }
   for (const r of rings) { r.taken = false; r.noseOk = null; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
   clearFurrows();
-  Object.assign(P, { fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
+  resetTargets(); clearBullets();
+  Object.assign(P, { targets: 0, targetCoins: 0, fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
   P.w.set(0, 0, 0); P.vel.set(0, 0, 0); P.turb.set(0, 0, 0);
 }
 
@@ -2970,6 +3358,7 @@ function finishResults() {
   const rows = [];
   rows.push(['Дистанция ' + dist + ' м', dist]);
   if (P.coins) rows.push([`Монеты и кольца${P.rings ? ` (колец: ${P.rings})` : ''}`, P.coins]);
+  if (P.targets) rows.push([`🎯 Мишени (${P.targets})`, P.targetCoins]);
   if (P.finished) rows.push(['🏁 Финиш!', finishBonus(levelIdx)]);
   const total = rows.reduce((s, r) => s + r[1], 0);
   save.money += total;
@@ -3088,6 +3477,7 @@ function updateFlightHud() {
   $('h-speed').textContent = Math.round(v * 3.6) + ' км/ч';
   $('h-alt').textContent = Math.max(0, Math.round(P.pos.y - terrainH(P.pos.x, P.pos.z))) + ' м';
   $('h-dist').textContent = Math.floor(P.maxZ) + ' м';
+  $('h-tg').textContent = `${P.targets} / ${targets.length}`;
   $('h-prog').style.width = clamp(P.maxZ / FINISH_Z, 0, 1) * 100 + '%';
   $('h-best').style.left = clamp((save.lvBest[levelIdx] || 0) / FINISH_Z, 0, 1) * 100 + '%';
   $('h-togo').textContent = P.maxZ < FINISH_Z ? `до финиша ${Math.ceil(FINISH_Z - P.maxZ)} м` : 'финиш!';
@@ -3097,7 +3487,7 @@ function updateFlightHud() {
   }
   let w = '';
   if (P.pos.y > THIN_AIR) w = 'Разреженный воздух — крылья и мотор теряют силу';
-  else if (Math.abs(P.pos.x) > VALLEY + 10) w = 'Осторожно, горы!';
+  else if (Math.abs(P.pos.x) > VALLEY - 30) w = 'Горный ветер разворачивает к трассе';
   if (w !== warnText) { warnText = w; $('hud-warn').textContent = w; $('hud-warn').style.display = w ? 'block' : 'none'; }
 }
 
@@ -3200,7 +3590,7 @@ addEventListener('keyup', (e) => {
   keys[e.code] = false;
   if (mode === 'aim' && e.code === 'Space' && aim.pulling) { aim.pulling = false; launch(); }
 });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseFire = false; });
 // Натяжение как в Angry Birds: тянешь самолёт пальцем или мышью и отпускаешь.
 // Вниз — сильнее и выше, вбок — поворот в противоположную сторону.
 const drag = { id: null, x0: 0, y0: 0, pitch: 25, yaw: 0 };
@@ -3220,6 +3610,9 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 renderer.domElement.addEventListener('pointermove', (e) => {
   if (mode === 'aim' && e.pointerId === drag.id) aimFromDrag(e.clientX - drag.x0, e.clientY - drag.y0);
 });
+// Мышью в полёте стреляем левой кнопкой
+renderer.domElement.addEventListener('pointerdown', (e) => { if (mode === 'flight' && e.pointerType === 'mouse' && e.button === 0) mouseFire = true; });
+addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') mouseFire = false; });
 const endDrag = (e) => {
   if (e.pointerId !== drag.id) return;
   drag.id = null;
@@ -3254,6 +3647,12 @@ if (isTouch) document.body.classList.add('touch');
     Sound.init();
     if (P.fuel > 0) touch.btn = !touch.btn;
   });
+  // Огонь — пока держишь палец
+  const fb = $('fbtn');
+  fb.addEventListener('pointerdown', (e) => { e.preventDefault(); Sound.init(); touch.fire = true; capture(fb, e.pointerId); });
+  const stopFire = () => { touch.fire = false; };
+  fb.addEventListener('pointerup', stopFire);
+  fb.addEventListener('pointercancel', stopFire);
   $('tfull').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) { await document.documentElement.requestFullscreen(); await screen.orientation?.lock?.('landscape'); }
@@ -3267,6 +3666,9 @@ function updateTouchUi() {
   $('pause-btn').classList.toggle('hidden', !(mode === 'flight' && !P.ended && !paused));
   $('touch').classList.toggle('hidden', !show);
   $('tbtn').classList.toggle('hidden', !(S.thrust > 0));
+  $('fbtn').classList.toggle('hidden', !(save.lv.gun > 0));
+  if (!show) touch.fire = false;
+  $('fbtn').classList.toggle('on', touch.fire);
   if (!(P.fuel > 0)) touch.btn = false;
   if (!show) { touch.x = touch.y = 0; touch.btn = false; }
   $('tbtn').classList.toggle('dim', !(P.fuel > 0));
@@ -3438,6 +3840,7 @@ function frame(now) {
       if (!P.ended) collectStuff();
       plane.position.copy(P.pos);
       plane.quaternion.copy(P.q);
+      if (!P.ended) fireGun(dt, inp.fire);
       animateEngines(dt, P.throttle ? 60 : Math.min(25, P.vel.length() * 0.5), P.throttle);
       if (P.throttle) {
         puffTimer += dt;
@@ -3471,6 +3874,8 @@ function frame(now) {
   }
 
   if (auroraMat) auroraMat.uniforms.t.value = simTime;
+  updateTargets(simTime, dt);
+  updateBullets(dt);
   updateParticles(dt);
   updateRipples(dt);
   updateSparks(dt);
@@ -3492,4 +3897,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { targets, bullets, fireGun, gunStats, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
