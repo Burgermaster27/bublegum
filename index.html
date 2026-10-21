@@ -91,8 +91,7 @@
   #dev { border: 1px dashed rgba(255, 204, 51, .5); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   #dev .dev-head { color: var(--gold); font-weight: 700; font-size: 14px; }
     #set-close { background: var(--gold); color: #2a2000; font-size: 16px; padding: 10px; }
-  #open-inspect { margin-left: auto; margin-right: 8px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 18px; padding: 0; }
-  #open-settings { margin-right: 12px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 19px; padding: 0; }
+  #open-settings { margin-left: auto; margin-right: 12px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 19px; padding: 0; }
 
   /* ---------- hangar ---------- */
   #hangar { pointer-events: none; }
@@ -205,7 +204,7 @@
 
   @media (max-width: 760px) {
     #left-panel { display: none; }
-    #shop { width: auto; left: 14px; top: 30vh; bottom: 96px; }
+    #shop { width: auto; left: 14px; bottom: 96px; }
     #go { left: 50%; bottom: 20px; }
     #hud-help { display: none; }
     /* вертикальный телефон: компактный HUD */
@@ -285,7 +284,7 @@
     <div id="records"></div>
   </div>
   <div id="shop">
-    <header><h2>Мастерская</h2><button id="open-inspect" class="hbtn" title="Осмотреть самолёт" aria-label="Осмотреть самолёт">👁</button><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money"><i class="coin"></i><span id="s-money">0</span></div></header>
+    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money"><i class="coin"></i><span id="s-money">0</span></div></header>
     <div id="cards"></div>
   </div>
   <button id="go">На старт ▶</button>
