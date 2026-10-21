@@ -33,7 +33,10 @@
   #hud-stats { top: 14px; left: 14px; min-width: 190px; }
   #hud-stats .row { display: flex; justify-content: space-between; gap: 16px; font-size: 15px; line-height: 1.6; }
   #hud-stats .row b { font-variant-numeric: tabular-nums; }
-  #hud-money { top: 14px; right: 14px; font-size: 20px; color: var(--gold); font-weight: 700; }
+  /* монета нарисована CSS — одинаково жёлтая на любом телефоне, в отличие от эмодзи */
+  .coin { display: inline-block; width: .95em; height: .95em; border-radius: 50%; vertical-align: -0.14em; margin-right: .3em;
+    background: radial-gradient(circle at 35% 30%, #fff6b0 0 18%, #ffd43b 40%, #f0a800 100%);
+    box-shadow: inset 0 0 0 .09em #c98a00, 0 1px 2px rgba(0,0,0,.35); }
   #hud-progress { top: 14px; left: 50%; transform: translateX(-50%); width: min(520px, 46vw); padding: 8px 12px; }
   .prog-track { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,.15); overflow: visible; }
   .prog-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, #4fc3f7, #66d17a); }
@@ -154,17 +157,16 @@
     background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.on { background: rgba(255, 120, 30, .95); color: #fff; box-shadow: 0 0 0 4px rgba(255,200,80,.55), 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.dim { opacity: .35; }
-  #tquit { position: absolute; left: 18px; bottom: 158px; padding: 7px 12px; background: rgba(18,26,38,.7);
-    color: #fff; font-size: 13px; pointer-events: auto; }
   /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
-  body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; top: 72px; bottom: auto; }
+  body.touch #hud-fuel { display: none; }   /* на телефоне секунды топлива показаны прямо на кнопке мотора */
+  #tbtn { line-height: 1.15; }
+  #tbtn small { display: block; font-size: 13px; font-weight: 700; opacity: .85; font-variant-numeric: tabular-nums; }
 
   /* телефон в альбомной ориентации */
   @media (max-height: 520px) {
     .hud-box { padding: 6px 10px; }
     #hud-stats { min-width: 140px; top: 8px; left: 8px; }
     #hud-stats .row { font-size: 12px; line-height: 1.45; }
-    #hud-money { top: 8px; right: 8px; font-size: 15px; }
     #hud-progress { top: 8px; width: 40vw; padding: 6px 10px; }
     #left-panel { top: 8px; left: 8px; bottom: 76px; width: 38vw; padding: 10px 12px; overflow-y: auto; }
     #left-panel h1 { font-size: 18px; }
@@ -180,8 +182,6 @@
     #stick { width: 170px; height: 170px; bottom: 10px; }
     #knob { width: 72px; height: 72px; }
     #tbtn { width: 100px; height: 100px; bottom: 14px; }
-    #tquit { bottom: 126px; }
-    body.touch #hud-fuel { top: 54px; }
   }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
     font-size: 22px; color: #123; font-weight: 700; }
@@ -194,14 +194,11 @@
     /* вертикальный телефон: компактный HUD */
     #hud-stats { min-width: 0; padding: 6px 10px; }
     #hud-stats .row { font-size: 12px; line-height: 1.45; gap: 10px; }
-    #hud-money { font-size: 15px; padding: 6px 10px; }
-    #hud-progress { top: 80px; width: 64vw; padding: 6px 10px; }
+    #hud-progress { top: 14px; left: auto; right: 14px; transform: none; width: 42vw; padding: 6px 10px; }
     .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
     .prog-labels { justify-content: center; }
-    body.touch #hud-fuel { top: 128px; width: 50vw; }
     #stick { width: 180px; height: 180px; }
     #tbtn { width: 108px; height: 108px; }
-    #tquit { bottom: 146px; }
     #hud-warn { top: 180px; font-size: 13px; }
   }
 </style>
@@ -222,7 +219,6 @@
     <div class="prog-track"><div class="prog-fill" id="h-prog"></div><div class="prog-best" id="h-best"></div></div>
     <div class="prog-labels"><span>Старт</span><span id="h-togo"></span><span>Финиш 🏁</span></div>
   </div>
-  <div id="hud-money" class="hud-box">🪙 <span id="h-money">0</span></div>
   <div id="hud-warn" class="hud-box"></div>
   <div id="hud-fuel" class="hud-box">
     <div class="label" id="h-fuel-label">Топливо — держи <span class="kbd">Пробел</span></div>
@@ -241,7 +237,6 @@
 <div id="touch" class="safe hidden">
   <div id="stick"><div id="knob"></div></div>
   <button id="tbtn">Мотор</button>
-  <button id="tquit">✕ Стоп</button>
 </div>
 
 <div class="safe">
@@ -264,7 +259,7 @@
     <div id="records"></div>
   </div>
   <div id="shop">
-    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money">🪙 <span id="s-money">0</span></div></header>
+    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money"><i class="coin"></i><span id="s-money">0</span></div></header>
     <div id="cards"></div>
   </div>
   <button id="go">На старт ▶</button>

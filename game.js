@@ -1600,7 +1600,7 @@ function finishResults() {
   };
   $('r-title').textContent = P.finished ? '🏁 ФИНИШ!' : titles[P.reason] || 'Полёт окончен';
   $('r-reason').textContent = reasons[P.reason] || '';
-  $('r-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>+${b}</td></tr>`).join('') + `<tr class="total"><td>Итого</td><td>🪙 ${total}</td></tr>`;
+  $('r-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>+${b}</td></tr>`).join('') + `<tr class="total"><td>Итого</td><td><i class="coin"></i>${total}</td></tr>`;
   $('r-rec').textContent = rec;
   show('result');
   hide('hud');
@@ -1632,7 +1632,7 @@ function renderShop() {
     let btn;
     if (lv >= maxLv) btn = '<button class="buy max" disabled>МАКС</button>';
     else if (locked) btn = '<button class="buy" disabled>🔒</button>';
-    else btn = `<button class="buy" data-k="${key}" ${save.money < cost ? 'disabled' : ''}>🪙 ${cost}</button>`;
+    else btn = `<button class="buy" data-k="${key}" ${save.money < cost ? 'disabled' : ''}><i class="coin"></i>${cost}</button>`;
     const next = lv < maxLv ? ` → <span style="color:#ffd76a">${u.levels[lv + 1]}</span>` : '';
     const desc = locked ? (key === 'fuel' ? 'Топливо появится только после покупки пропеллера.' : 'Сначала купи пропеллер.') : u.desc;
     card.innerHTML = `<div class="ico">${u.icon}</div><div class="name">${u.name}</div>${btn}<div class="lvl">${u.levels[lv]}${next}</div><div class="pips">${pips}</div><div class="desc">${desc}</div>`;
@@ -1685,7 +1685,6 @@ function updateFlightHud() {
   $('h-speed').textContent = Math.round(v * 3.6) + ' км/ч';
   $('h-alt').textContent = Math.max(0, Math.round(P.pos.y - terrainH(P.pos.x, P.pos.z))) + ' м';
   $('h-dist').textContent = Math.floor(P.maxZ) + ' м';
-  $('h-money').textContent = Math.floor(P.maxZ) + P.coins;
   $('h-prog').style.width = clamp(P.maxZ / FINISH_Z, 0, 1) * 100 + '%';
   $('h-best').style.left = clamp(save.best / FINISH_Z, 0, 1) * 100 + '%';
   $('h-togo').textContent = P.maxZ < FINISH_Z ? `до финиша ${Math.ceil(FINISH_Z - P.maxZ)} м` : 'финиш!';
@@ -1796,7 +1795,6 @@ if (isTouch) document.body.classList.add('touch');
     Sound.init();
     if (P.fuel > 0) touch.btn = !touch.btn;
   });
-  $('tquit').addEventListener('click', () => { if (mode === 'flight' && !P.ended) endFlight('quit'); });
   $('tfull').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) { await document.documentElement.requestFullscreen(); await screen.orientation?.lock?.('landscape'); }
@@ -1813,8 +1811,8 @@ function updateTouchUi() {
   if (!show) { touch.x = touch.y = 0; touch.btn = false; }
   $('tbtn').classList.toggle('dim', !(P.fuel > 0));
   $('tbtn').classList.toggle('on', touch.btn);
-  const label = touch.btn ? 'Мотор ВКЛ' : 'Мотор';
-  if ($('tbtn').textContent !== label) $('tbtn').textContent = label;
+  const label = P.fuel > 0 ? `${touch.btn ? 'Мотор ВКЛ' : 'Мотор'}<small>${P.fuel.toFixed(1)} с</small>` : 'Пусто';
+  if ($('tbtn').innerHTML !== label) $('tbtn').innerHTML = label;
 }
 
 // =====================================================================
