@@ -231,7 +231,15 @@ function terrainH(x, z) {
   h -= riverDip(z) * (1 - smooth(VALLEY - 5, VALLEY + 25, ax));
   return h;
 }
-const roadX = (z) => 22 * Math.sin(z * 0.0035) + 9 * Math.sin(z * 0.011 + 1);
+const roadBase = (z) => 22 * Math.sin(z * 0.0035) + 9 * Math.sin(z * 0.011 + 1);
+// Возле реки дорога выпрямляется и идёт ровно по мосту
+const BRIDGE_X = roadBase(RIVER_Z), BRIDGE_HALF_LEN = 40;
+const roadX = (z) => lerp(roadBase(z), BRIDGE_X, 1 - smooth(BRIDGE_HALF_LEN + 5, BRIDGE_HALF_LEN + 70, Math.abs(z - RIVER_Z)));
+// Высота настила: пологая арка над водой, к краям плавно садится на берег (это и есть въезды)
+function bridgeDeckY(z) {
+  const dz = Math.abs(z - RIVER_Z);
+  return Math.max(terrainH(BRIDGE_X, z) + 0.15, 1.3 - 0.0028 * dz * dz);
+}
 
 function fieldColor(x, z, out) {
   const ax = Math.abs(x);
@@ -291,7 +299,8 @@ function buildRoadAndWater() {
   for (let z = -60, i = 0; z <= 3300; z += 4, i++) {
     const x = roadX(z);
     for (const s of [-2.8, 2.8]) pts.push(x + s, terrainH(x + s, z) + 0.12, z);
-    if (i > 0) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    // на мосту дорогу заменяет настил
+    if (i > 0 && Math.abs(z - 2 - RIVER_Z) > BRIDGE_HALF_LEN - 3) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   }
   const rg = new THREE.BufferGeometry();
   rg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -816,14 +825,41 @@ function buildDecor(R) {
   chunkedInstances(tufts, tuftG, new THREE.MeshLambertMaterial({ flatShading: true }), tuftItems, false);
   scene.add(tufts);
   // Мост через реку
-  const bx = roadX(RIVER_Z);
-  const bridge = new THREE.Group();
-  bridge.add(mesh(new THREE.BoxGeometry(7, 0.6, 50), std(0x8b6a43), 0, 0, 0));
-  for (const sx of [-1, 1]) bridge.add(mesh(new THREE.BoxGeometry(0.3, 1.2, 50), std(0x6b4f30), sx * 3.4, 0.8, 0));
-  for (let k = -2; k <= 2; k++) bridge.add(mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), std(0x5b3f22), 0, -3, k * 10));
-  bridge.position.set(bx, 0.4, RIVER_Z);
-  // Настил моста — это «земля», на него можно сесть (см. surfaceAt); твёрдые только опоры под ним
-  addObstacle([-2, -1, 0, 1, 2].map((k) => ({ t: 'cyl', x: bx, z: RIVER_Z + k * 10, r: 0.4, y0: -6, y1: 0.1 })));
+  // Деревянный мост: настил из досок по арке, въезды сливаются с дорогой, перила только над водой
+  const bx = BRIDGE_X, bridge = new THREE.Group();
+  const plankA = std(0x8b6a43), plankB = std(0x7a5b38), beam = std(0x5b3f22), stoneM = std(0x8a8580);
+  for (let z = -BRIDGE_HALF_LEN; z < BRIDGE_HALF_LEN; z += 1) {
+    const y0 = bridgeDeckY(RIVER_Z + z), y1 = bridgeDeckY(RIVER_Z + z + 1);
+    const plank = mesh(new THREE.BoxGeometry(6.2, 0.3, Math.hypot(1, y1 - y0) + 0.02), (z & 1) ? plankA : plankB, 0, (y0 + y1) / 2 - 0.15, z + 0.5);
+    plank.rotation.x = -Math.atan2(y1 - y0, 1);
+    bridge.add(plank);
+  }
+  const railFrom = -30, railTo = 30, step = 4;
+  for (const sx of [-1, 1]) {
+    for (let z = railFrom; z <= railTo; z += step) {
+      const y = bridgeDeckY(RIVER_Z + z);
+      bridge.add(mesh(new THREE.BoxGeometry(0.22, 1.1, 0.22), beam, sx * 3.0, y + 0.55, z));
+      if (z < railTo) {
+        const y2 = bridgeDeckY(RIVER_Z + z + step);
+        const rail = mesh(new THREE.BoxGeometry(0.14, 0.14, Math.hypot(step, y2 - y) + 0.1), plankA, sx * 3.0, (y + y2) / 2 + 1.05, z + step / 2);
+        rail.rotation.x = -Math.atan2(y2 - y, step); bridge.add(rail);
+      }
+    }
+  }
+  const piers = [];
+  for (const z of [-20, -10, 0, 10, 20]) {
+    const top = bridgeDeckY(RIVER_Z + z) - 0.3;
+    for (const sx of [-1, 1]) bridge.add(mesh(new THREE.CylinderGeometry(0.35, 0.45, top + 7, 7), beam, sx * 2.4, (top - 7) / 2, z));
+    bridge.add(mesh(new THREE.BoxGeometry(5.6, 0.35, 0.4), beam, 0, top - 0.2, z));
+    for (const sx of [-1, 1]) piers.push({ t: 'cyl', x: bx + sx * 2.4, z: RIVER_Z + z, r: 0.45, y0: -7, y1: top - 0.4 });
+  }
+  for (const sz of [-1, 1]) {                        // каменные устои там, где мост сходит на берег
+    const z = sz * 30, y = bridgeDeckY(RIVER_Z + z);
+    bridge.add(mesh(jitter(new THREE.BoxGeometry(7.2, 2.4, 3, 3, 1, 1), 0.25, 40 + sz), stoneM, 0, y - 1.5, z));
+  }
+  bridge.position.set(bx, 0, RIVER_Z);
+  // Настил — это «земля», на него можно сесть; твёрдые только сваи под ним
+  addObstacle(piers);
   statics.add(bridge);
   // Облака
   for (let i = 0; i < 80; i++) (addCloud((R() - 0.5) * 700, 70 + R() * 110, -200 + R() * 3600, 0.8 + R() * 1.2, i * 13 + 5));
@@ -1763,11 +1799,10 @@ function addFurrow(pos, heading, n) {
 function clearFurrows() { for (const g of furrows) scene.remove(g); furrows.length = 0; }
 
 // Поверхность под точкой: рельеф, настил моста или вода
-const BRIDGE = { x: roadX(RIVER_Z), half: 3.4, len: 25, top: 0.7 };
-function onBridge(x, z) { return Math.abs(x - BRIDGE.x) < BRIDGE.half && Math.abs(z - RIVER_Z) < BRIDGE.len; }
+function onBridge(x, z) { return Math.abs(x - BRIDGE_X) < 3.1 && Math.abs(z - RIVER_Z) < BRIDGE_HALF_LEN; }
 function groundContact(dt) {
   const bridge = onBridge(P.pos.x, P.pos.z);
-  const gh = bridge ? Math.max(BRIDGE.top, terrainH(P.pos.x, P.pos.z)) : terrainH(P.pos.x, P.pos.z);
+  const gh = bridge ? bridgeDeckY(P.pos.z) : terrainH(P.pos.x, P.pos.z);
   const inRiver = !bridge && Math.abs(P.pos.z - RIVER_Z) < 23 && gh < WATER_Y;
   const surf = inRiver ? WATER_Y : gh;
   const clearance = S.gear ? 1.15 : 0.5;
