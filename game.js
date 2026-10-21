@@ -627,9 +627,8 @@ function addRing(x, y, z) {
   const m = mesh(new THREE.TorusGeometry(6, 0.55, 8, 28), std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }));
   m.position.set(x, y, z);
   world.add(m);
-  const r = { c: new V3(x, y, z), R: 6, mesh: m, taken: false };
-  rings.push(r);
-  addObstacle([{ t: 'torus', c: r.c, R: 6, r: 0.55 }]);
+  // Кольцо без столкновений: сквозь него просто пролетают
+  rings.push({ c: new V3(x, y, z), R: 6, tube: 0.55, mesh: m, taken: false, noseOk: null });
 }
 
 // --- Декор без столкновений ---
@@ -1160,6 +1159,7 @@ const P = {
   pos: new V3(), vel: new V3(), q: new THREE.Quaternion(), w: new V3(),
   fuel: 0, throttle: false, onGround: false, stopTimer: 0, ended: false, endTime: 0,
   maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, reason: '', finished: false, turb: new V3(), time: 0, lastImpact: 0, airTime: 0,
+  prevNose: new V3(), prevTail: new V3(), lastFurrow: new V3(), bellyDown: false,
 };
 const keys = {};
 const _f = new V3(), _u = new V3(), _l = new V3(), _F = new V3(), _vd = new V3(), _vb = new V3(), _tmp = new V3(), _tmp2 = new V3(), _qi = new THREE.Quaternion(), _dq = new THREE.Quaternion();
@@ -1273,11 +1273,34 @@ function physicsStep(dt, inp) {
   groundContact(dt);
 }
 
+// Борозда от посадки на брюхо: тёмные полосы взрытой земли за самолётом
+const furrows = [];
+const furrowGeo = new THREE.BoxGeometry(1.1, 0.12, 0.8);
+const furrowMat = new THREE.MeshLambertMaterial({ color: 0x4a3420, flatShading: true });
+const moundMat = new THREE.MeshLambertMaterial({ color: 0x7a5a36, flatShading: true });
+const moundGeo = new THREE.BoxGeometry(0.35, 0.22, 0.8);
+function addFurrow(pos, heading, n) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(furrowGeo, furrowMat));
+  for (const sx of [-0.72, 0.72]) { const m = new THREE.Mesh(moundGeo, moundMat); m.position.set(sx, 0.08, 0); g.add(m); }
+  const y = terrainH(pos.x, pos.z);
+  g.position.set(pos.x, y + 0.02, pos.z);
+  const fw = new V3(Math.sin(heading), 0, Math.cos(heading));
+  fw.addScaledVector(n, -fw.dot(n)).normalize();
+  g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new V3().crossVectors(n, fw), n, fw));
+  g.children.forEach((c) => { c.receiveShadow = true; });
+  scene.add(g);
+  furrows.push(g);
+}
+function clearFurrows() { for (const g of furrows) scene.remove(g); furrows.length = 0; }
+
 function groundContact(dt) {
   const gh = terrainH(P.pos.x, P.pos.z);
   const inRiver = Math.abs(P.pos.z - RIVER_Z) < 23 && gh < WATER_Y;
   const surf = inRiver ? WATER_Y : gh;
   const clearance = S.gear ? 1.15 : 0.5;
+  // Севший на брюхо крылатый самолёт уже не взлетит: прижимаем его к земле до остановки
+  if (P.bellyDown && !inRiver) P.pos.y = Math.min(P.pos.y, surf + clearance);
   if (P.pos.y - clearance > surf) {
     if (P.onGround && P.pos.y - clearance > surf + 0.4) P.onGround = false;
     return;
@@ -1290,7 +1313,9 @@ function groundContact(dt) {
   const crashVy = S.gear ? 24 : 20;
   if (!P.onGround) {
     if (vy > crashVy || (_u.y < -0.2 && vy > 6) || (_f.y < -0.75 && vy > 12)) { P.pos.y = surf + clearance; endFlight('crash', 'Удар о землю'); return; }
-    if (vy > 4.5) {
+    // Отскакивает только бескрылая «коробка» и самолёт на шасси;
+    // крылатый без шасси садится на брюхо и пашет землю
+    if (vy > 4.5 && (S.gear || S.liftK === 0)) {
       // Отскок
       P.vel.y = vy * (S.gear ? 0.32 : 0.42);
       P.vel.x *= S.gear ? 0.9 : 0.78; P.vel.z *= S.gear ? 0.9 : 0.78;
@@ -1305,13 +1330,19 @@ function groundContact(dt) {
     }
     P.onGround = true;
     P.lastImpact = vy;
-    Sound.thud(0.3, 0.25);
+    Sound.thud(S.gear ? 0.3 : 0.55, S.gear ? 0.25 : 0.45);
+    if (!S.gear && S.liftK > 0) {
+      P.bellyDown = true;
+      for (let i = 0; i < 10; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 3, -0.3, (Math.random() - 0.5) * 3)), 0xa88a5c, 1.2, 1.1);
+      P.w.set(0, 0, 0);
+    }
   }
   P.pos.y = surf + clearance;
   if (P.vel.y < 0) P.vel.y = 0;
   // Трение качения / скольжения
   const hv = Math.hypot(P.vel.x, P.vel.z);
-  const fr = (S.gear ? 2.2 : 7.5) * dt;
+  const belly = !S.gear && S.liftK > 0;      // крылья мешают скользить: тормозим резко
+  const fr = (S.gear ? 2.2 : belly ? 20 + hv * 0.9 : 7.5) * dt;
   if (hv > 0) { const k = Math.max(0, hv - fr) / hv; P.vel.x *= k; P.vel.z *= k; }
   // Ложимся по склону: «верх» самолёта — нормаль рельефа, нос — по курсу движения
   const heading = Math.atan2(P.vel.x || _f.x, P.vel.z || _f.z);
@@ -1325,6 +1356,7 @@ function groundContact(dt) {
   P.q.slerp(_qi, Math.min(1, dt * 4));
   P.w.multiplyScalar(Math.max(0, 1 - dt * 6));
   if (!S.gear && hv > 4 && Math.random() < dt * 25) spawnPuff(P.pos.clone().add(new V3(0, -0.4, 0)), 0xc9b48a, 0.8, 0.8);
+  if (!S.gear && hv > 0.8 && !inRiver && P.pos.distanceToSquared(P.lastFurrow) > 0.36) { addFurrow(P.pos, heading, n); P.lastFurrow.copy(P.pos); }
   if (hv < 1.5 && !(P.throttle)) { P.stopTimer += dt; if (P.stopTimer > 0.6) endFlight('landed'); }
   else P.stopTimer = 0;
 }
@@ -1386,15 +1418,31 @@ function collectStuff() {
     if (Math.abs(c.pos.z - P.pos.z) > 4) continue;
     if (c.pos.distanceToSquared(P.pos) < 2.8 * 2.8) { c.taken = true; P.coins += 5; Sound.blip(880, 0.1, 'triangle', 0.18); }
   }
+  // Кольцо засчитывается, только если сквозь него прошёл весь фюзеляж:
+  // и нос, и хвост пересекли плоскость кольца внутри него (с запасом на толщину корпуса)
+  _f.set(0, 0, 1).applyQuaternion(P.q);
+  const nose = _tmp.copy(P.pos).addScaledVector(_f, 2.1), tail = _tmp2.copy(P.pos).addScaledVector(_f, -2.1);
+  const crossing = (a, b, c) => {
+    if ((a.z < c.z) === (b.z < c.z) || b.z < a.z) return null;          // считаем только пролёт вперёд
+    const t = (c.z - a.z) / (b.z - a.z);
+    return Math.hypot(lerp(a.x, b.x, t) - c.x, lerp(a.y, b.y, t) - c.y);
+  };
   for (const r of rings) {
-    if (r.taken) continue;
-    const dz = P.pos.z - r.c.z;
-    if (Math.abs(dz) < 1.2 && Math.hypot(P.pos.x - r.c.x, P.pos.y - r.c.y) < r.R - 0.6) {
+    if (r.taken || Math.abs(r.c.z - P.pos.z) > 12) continue;
+    const inner = r.R - r.tube - 0.45;
+    const dn = crossing(P.prevNose, nose, r.c);
+    if (dn !== null) r.noseOk = dn < inner;
+    const dt = crossing(P.prevTail, tail, r.c);
+    if (dt === null) continue;
+    const ok = r.noseOk && dt < inner;
+    r.noseOk = null;
+    if (ok) {
       r.taken = true; P.rings++; P.coins += 25;
       r.mesh.material = std(0x6ef08a, { emissive: 0x1d7a33, roughness: 0.4 });
       toast('Кольцо! +25'); Sound.blip(660, 0.25, 'sine', 0.25); setTimeout(() => Sound.blip(990, 0.25, 'sine', 0.2), 90);
     }
   }
+  P.prevNose.copy(nose); P.prevTail.copy(tail);
 }
 
 // =====================================================================
@@ -1463,8 +1511,9 @@ function updateTrajectory() {
 
 function resetRun() {
   for (const c of coins) c.taken = false;
-  for (const r of rings) { r.taken = false; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
-  Object.assign(P, { fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0 });
+  for (const r of rings) { r.taken = false; r.noseOk = null; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
+  clearFurrows();
+  Object.assign(P, { fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false });
   P.w.set(0, 0, 0); P.vel.set(0, 0, 0); P.turb.set(0, 0, 0);
 }
 
@@ -1493,6 +1542,8 @@ function launch() {
   _f.set(0, 0, 1).applyQuaternion(P.q);
   P.vel.copy(_f).multiplyScalar(S.launch * power);
   P.w.set(0, 0, 0);
+  P.prevNose.copy(P.pos).addScaledVector(_f, 2.1); P.prevTail.copy(P.pos).addScaledVector(_f, -2.1);
+  P.lastFurrow.set(1e9, 0, 0);
   mode = 'flight';
   camHeading.set(_f.x, 0, _f.z).normalize();
   hide('aim'); hide('aim-hint'); show('hud');
@@ -1949,4 +2000,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); rebuildPlane(); }, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
