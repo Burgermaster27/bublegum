@@ -776,6 +776,13 @@ function buildDecor(R) {
   for (const sx of [-1, 1]) bridge.add(mesh(new THREE.BoxGeometry(0.3, 1.2, 50), std(0x6b4f30), sx * 3.4, 0.8, 0));
   for (let k = -2; k <= 2; k++) bridge.add(mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), std(0x5b3f22), 0, -3, k * 10));
   bridge.position.set(bx, 0.4, RIVER_Z);
+  // Мост — препятствие: настил, перила и опоры
+  addObstacle([
+    { t: 'box', min: new V3(bx - 3.5, 0.1, RIVER_Z - 25), max: new V3(bx + 3.5, 0.7, RIVER_Z + 25) },
+    { t: 'box', min: new V3(bx - 3.55, 0.6, RIVER_Z - 25), max: new V3(bx - 3.25, 1.8, RIVER_Z + 25) },
+    { t: 'box', min: new V3(bx + 3.25, 0.6, RIVER_Z - 25), max: new V3(bx + 3.55, 1.8, RIVER_Z + 25) },
+    ...[-2, -1, 0, 1, 2].map((k) => ({ t: 'cyl', x: bx, z: RIVER_Z + k * 10, r: 0.4, y0: -6, y1: 0.4 })),
+  ]);
   statics.add(bridge);
   // Облака
   for (let i = 0; i < 80; i++) (addCloud((R() - 0.5) * 700, 70 + R() * 110, -200 + R() * 3600, 0.8 + R() * 1.2, i * 13 + 5));
