@@ -1426,6 +1426,30 @@ function relaxBands(dt) {
   setBand(bands[1], new V3(SL.tips[1].x, by + SL.tips[1].y, SL.tips[1].z), pouch.position);
 }
 
+// Пунктир траектории при натяжении (баллистика без учёта крыльев и мотора)
+const TRAJ_N = 26;
+const trajDots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }), TRAJ_N);
+trajDots.frustumCulled = false;
+trajDots.visible = false;
+scene.add(trajDots);
+function updateTrajectory() {
+  trajDots.visible = mode === 'aim' && aim.pull > 0.02;
+  if (!trajDots.visible) return;
+  const q = aimQuat(_qi);
+  const p = _tmp.copy(launchBase), v = _tmp2.set(0, 0, 1).applyQuaternion(q).multiplyScalar(S.launch * (0.25 + 0.75 * aim.pull));
+  for (let i = 0; i < TRAJ_N; i++) {
+    for (let k = 0; k < 6; k++) {
+      const sp = v.length(), dt = 1 / 60;
+      v.addScaledVector(v, -S.cd0 * sp * dt); v.y -= G * dt;
+      p.addScaledVector(v, dt);
+    }
+    const sc = p.y < terrainH(p.x, p.z) ? 0 : 1 - i / TRAJ_N * 0.5;
+    _m4.compose(p, _q.identity(), _s.setScalar(sc));
+    trajDots.setMatrixAt(i, _m4);
+  }
+  trajDots.instanceMatrix.needsUpdate = true;
+}
+
 function resetRun() {
   for (const c of coins) c.taken = false;
   for (const r of rings) { r.taken = false; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
@@ -1651,8 +1675,33 @@ addEventListener('keyup', (e) => {
   if (mode === 'aim' && e.code === 'Space' && aim.pulling) { aim.pulling = false; launch(); }
 });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-renderer.domElement.addEventListener('pointerdown', (e) => { if (mode === 'aim' && e.pointerType === 'mouse') aim.pulling = true; });
-addEventListener('pointerup', (e) => { if (mode === 'aim' && aim.pulling && e.pointerType === 'mouse') { aim.pulling = false; launch(); } });
+// Натяжение как в Angry Birds: тянешь самолёт пальцем или мышью и отпускаешь.
+// Вниз — сильнее и выше, вбок — поворот в противоположную сторону.
+const drag = { id: null, x0: 0, y0: 0 };
+function aimFromDrag(dx, dy) {
+  const L = Math.min(innerWidth, innerHeight) * 0.38;
+  aim.pull = clamp(Math.hypot(dx, dy) / L, 0, 1);
+  const back = 0.35 + 0.6 * aim.pull;      // насколько резинка оттянута назад
+  aim.pitch = clamp(Math.atan2(Math.max(0, dy) / L, back) * 180 / Math.PI, 2, 65);
+  aim.yaw = clamp(Math.atan2(-dx / L * 0.5, back) * 180 / Math.PI, -30, 30);
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (mode !== 'aim' || drag.id !== null) return;
+  Sound.init();
+  drag.id = e.pointerId; drag.x0 = e.clientX; drag.y0 = e.clientY;
+  try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* синтетические события */ }
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (mode === 'aim' && e.pointerId === drag.id) aimFromDrag(e.clientX - drag.x0, e.clientY - drag.y0);
+});
+const endDrag = (e) => {
+  if (e.pointerId !== drag.id) return;
+  drag.id = null;
+  if (mode !== 'aim') return;
+  if (aim.pull > 0.08) launch(); else aim.pull = 0;
+};
+renderer.domElement.addEventListener('pointerup', endDrag);
+renderer.domElement.addEventListener('pointercancel', endDrag);
 
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
@@ -1675,12 +1724,9 @@ if (isTouch) document.body.classList.add('touch');
   const press = (e) => {
     e.preventDefault(); capture(btn, e.pointerId); btn.classList.add('on');
     Sound.init();
-    if (mode === 'aim') aim.pulling = true; else touch.btn = true;
+    touch.btn = true;
   };
-  const release = () => {
-    btn.classList.remove('on'); touch.btn = false;
-    if (mode === 'aim' && aim.pulling) { aim.pulling = false; launch(); }
-  };
+  const release = () => { btn.classList.remove('on'); touch.btn = false; };
   btn.addEventListener('pointerdown', press);
   btn.addEventListener('pointerup', release);
   btn.addEventListener('pointercancel', release);
@@ -1693,11 +1739,12 @@ if (isTouch) document.body.classList.add('touch');
   });
 })();
 function updateTouchUi() {
-  const show = isTouch && (mode === 'aim' || (mode === 'flight' && !P.ended));
+  // Джойстик и кнопки появляются только после пуска, чтобы не мешать натяжению
+  const show = isTouch && mode === 'flight' && !P.ended;
   $('touch').classList.toggle('hidden', !show);
-  $('tbtn').textContent = mode === 'aim' ? 'Натянуть' : 'Мотор';
-  $('tbtn').classList.toggle('dim', mode === 'flight' && !(S.thrust > 0 && P.fuel > 0));
-  $('tquit').classList.toggle('hidden', mode !== 'flight');
+  $('tbtn').classList.toggle('hidden', !(S.thrust > 0));
+  $('tbtn').classList.toggle('dim', !(P.fuel > 0));
+  if (!show) { touch.x = touch.y = 0; touch.btn = false; }
 }
 
 // =====================================================================
@@ -1814,10 +1861,9 @@ function frame(now) {
     if (keys.KeyS || keys.ArrowDown) aim.pitch = clamp(aim.pitch - rate * dt, 2, 65);
     if (keys.KeyD || keys.ArrowRight) aim.yaw = clamp(aim.yaw + rate * dt, -30, 30);
     if (keys.KeyA || keys.ArrowLeft) aim.yaw = clamp(aim.yaw - rate * dt, -30, 30);
-    aim.pitch = clamp(aim.pitch - touch.y * rate * dt, 2, 65);
-    aim.yaw = clamp(aim.yaw + touch.x * rate * dt, -30, 30);
     if (aim.pulling) aim.pull = Math.min(1, aim.pull + dt / 1.1);
     placeOnSlingshot();
+    updateTrajectory();
     updateAimHud();
   } else if (mode === 'flight') {
     if (!P.ended) {

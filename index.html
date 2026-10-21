@@ -124,19 +124,19 @@
   body.touch .kb-only, body.touch #hud-help { display: none !important; }
   canvas, #touch * { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   #touch { position: fixed; inset: 0; pointer-events: none; }
-  #stick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 18px; width: 140px; height: 140px; border-radius: 50%;
-    background: rgba(18, 26, 38, .45); border: 2px solid rgba(255,255,255,.35); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
-  #knob { width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.75); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  #stick { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); width: 200px; height: 200px; border-radius: 50%;
+    background: rgba(18, 26, 38, .28); border: 2px solid rgba(255,255,255,.3); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+  #knob { width: 84px; height: 84px; border-radius: 50%; background: rgba(255,255,255,.6); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
   #tbtn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
     background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
   #tbtn.on { background: rgba(255, 140, 30, .95); transform: scale(.94); }
   #tbtn.dim { opacity: .35; }
-  #tquit { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: 156px; padding: 7px 12px; background: rgba(18,26,38,.7);
+  #tquit { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 22px; padding: 7px 12px; background: rgba(18,26,38,.7);
     color: #fff; font-size: 13px; pointer-events: auto; }
   body.touch #aim { top: 10px; bottom: auto; width: min(480px, 56vw); padding: 8px 12px; }
   body.touch #aim h3 { font-size: 15px; margin-bottom: 2px; }
   body.touch #aim p { font-size: 12px; margin: 2px 0; }
-  body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; bottom: 12px; }
+  body.touch #hud-fuel { width: min(300px, 40vw); padding: 6px 10px; top: 72px; bottom: auto; }
 
   /* телефон в альбомной ориентации */
   @media (max-height: 520px) {
@@ -156,9 +156,10 @@
     #result .box { padding: 12px 18px; }
     #result h2 { font-size: 22px; }
     #result button { margin-top: 8px; }
-    #stick { width: 120px; height: 120px; bottom: 12px; }
+    #stick { width: 170px; height: 170px; bottom: 10px; }
+    #knob { width: 72px; height: 72px; }
     #tbtn { width: 100px; height: 100px; bottom: 14px; }
-    #tquit { bottom: 124px; }
+    body.touch #hud-fuel { top: 54px; }
   }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
     font-size: 22px; color: #123; font-weight: 700; }
@@ -212,8 +213,8 @@
 <div id="aim" class="hidden">
   <h3>Натяни рогатку!</h3>
   <p class="kb-only"><span class="kbd">W</span><span class="kbd">S</span> — угол вверх/вниз, <span class="kbd">A</span><span class="kbd">D</span> — влево/вправо</p>
-  <p class="kb-only">Зажми <span class="kbd">Пробел</span> или кнопку мыши, чтобы натянуть, и отпусти для запуска</p>
-  <p class="touch-only">Джойстиком слева выбери угол, зажми «Натянуть» справа и отпусти</p>
+  <p class="kb-only">Зажми <span class="kbd">Пробел</span>, чтобы натянуть, и отпусти, или просто потяни мышью</p>
+  <p>Потяни вниз и отпусти, как в Angry Birds: дальше тянешь — сильнее и выше, вбок — поворот</p>
   <div class="power-track"><div class="power-fill" id="a-power"></div></div>
   <div class="vals"><span>Угол: <b id="a-pitch">25°</b></span><span>Курс: <b id="a-yaw">0°</b></span><span>Скорость: <b id="a-speed">0 км/ч</b></span></div>
 </div>
