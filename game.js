@@ -25,7 +25,8 @@ const G = 9.81;
 const VALLEY = 105;          // полуширина долины, дальше начинаются горы
 const RIVER_Z = 760;
 const WATER_Y = -1.6;
-const THIN_AIR = 130;        // выше этой высоты воздух разрежается
+const THIN_AIR = 130;
+const MAX_AIM_PITCH = 52;       // круче рогатка не запускает        // выше этой высоты воздух разрежается
 
 // =====================================================================
 //  Прокачка
@@ -1312,9 +1313,15 @@ function groundContact(dt) {
   const hv = Math.hypot(P.vel.x, P.vel.z);
   const fr = (S.gear ? 2.2 : 7.5) * dt;
   if (hv > 0) { const k = Math.max(0, hv - fr) / hv; P.vel.x *= k; P.vel.z *= k; }
-  // Выравниваем самолёт по земле, сохраняя курс
+  // Ложимся по склону: «верх» самолёта — нормаль рельефа, нос — по курсу движения
   const heading = Math.atan2(P.vel.x || _f.x, P.vel.z || _f.z);
-  _qi.setFromEuler(new THREE.Euler(S.gear ? -0.06 : 0, heading, 0, 'YXZ'));
+  const n = _tmp.set(terrainH(P.pos.x - 1, P.pos.z) - terrainH(P.pos.x + 1, P.pos.z), 2, terrainH(P.pos.x, P.pos.z - 1) - terrainH(P.pos.x, P.pos.z + 1)).normalize();
+  if (inRiver) n.set(0, 1, 0);
+  const fw = _tmp2.set(Math.sin(heading), 0, Math.cos(heading));
+  fw.addScaledVector(n, -fw.dot(n)).normalize();
+  const side = _vb.crossVectors(n, fw);
+  _qi.setFromRotationMatrix(_m4.makeBasis(side, n, fw));
+  if (S.gear) _qi.multiply(_dq.setFromAxisAngle(_l.set(1, 0, 0), -0.06));
   P.q.slerp(_qi, Math.min(1, dt * 4));
   P.w.multiplyScalar(Math.max(0, 1 - dt * 6));
   if (!S.gear && hv > 4 && Math.random() < dt * 25) spawnPuff(P.pos.clone().add(new V3(0, -0.4, 0)), 0xc9b48a, 0.8, 0.8);
@@ -1404,8 +1411,11 @@ function aimQuat(out) {
 function placeOnSlingshot() {
   launchBase.set(0, terrainH(0, 0) + SL.rest.y, 0);
   aimQuat(P.q);
-  _f.set(0, 0, 1).applyQuaternion(P.q);
-  P.pos.copy(launchBase).addScaledVector(_f, -aim.pull * 5.5);
+  // Резинку оттягиваем назад по курсу и чуть вниз, но хвост не должен уйти под землю
+  const yaw = -aim.yaw * Math.PI / 180;
+  P.pos.set(launchBase.x - Math.sin(yaw) * aim.pull * 5.5, launchBase.y - aim.pull * 1.2, launchBase.z - Math.cos(yaw) * aim.pull * 5.5);
+  const tailDrop = 2.2 * Math.sin(aim.pitch * Math.PI / 180) + (save.lv.gear ? 1.0 : 0.6);
+  P.pos.y = Math.max(P.pos.y, terrainH(P.pos.x, P.pos.z) + tailDrop);
   plane.position.copy(P.pos);
   plane.quaternion.copy(P.q);
   plane.visible = true;
@@ -1688,7 +1698,7 @@ function aimFromDrag(dx, dy) {
   const L = Math.min(innerWidth, innerHeight) * 0.38;
   aim.pull = clamp(Math.hypot(dx, dy) / L, 0, 1);
   const back = 0.35 + 0.6 * aim.pull;      // насколько резинка оттянута назад
-  aim.pitch = clamp(Math.atan2(Math.max(0, dy) / L, back) * 180 / Math.PI, 2, 65);
+  aim.pitch = clamp(Math.atan2(Math.max(0, dy) / L, back) * 180 / Math.PI, 2, MAX_AIM_PITCH);
   aim.yaw = clamp(Math.atan2(-dx / L * 0.5, back) * 180 / Math.PI, -30, 30);
 }
 renderer.domElement.addEventListener('pointerdown', (e) => {
@@ -1860,8 +1870,8 @@ function frame(now) {
 
   if (mode === 'aim') {
     const rate = 32;
-    if (keys.KeyW || keys.ArrowUp) aim.pitch = clamp(aim.pitch + rate * dt, 2, 65);
-    if (keys.KeyS || keys.ArrowDown) aim.pitch = clamp(aim.pitch - rate * dt, 2, 65);
+    if (keys.KeyW || keys.ArrowUp) aim.pitch = clamp(aim.pitch + rate * dt, 2, MAX_AIM_PITCH);
+    if (keys.KeyS || keys.ArrowDown) aim.pitch = clamp(aim.pitch - rate * dt, 2, MAX_AIM_PITCH);
     if (keys.KeyD || keys.ArrowRight) aim.yaw = clamp(aim.yaw + rate * dt, -30, 30);
     if (keys.KeyA || keys.ArrowLeft) aim.yaw = clamp(aim.yaw - rate * dt, -30, 30);
     if (aim.pulling) aim.pull = Math.min(1, aim.pull + dt / 1.1);
