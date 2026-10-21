@@ -2096,6 +2096,12 @@ renderer.domElement.addEventListener('pointerup', inspUp);
 renderer.domElement.addEventListener('pointercancel', inspUp);
 renderer.domElement.addEventListener('wheel', (e) => { if (insp.on) { insp.dist = clamp(insp.dist * (1 + Math.sign(e.deltaY) * 0.1), 5, 24); e.preventDefault(); } }, { passive: false });
 $('insp-back').addEventListener('click', () => setInspect(false));
+// Полоса над мастерской на телефоне принадлежит просмотрщику и касания туда не доходят,
+// поэтому пустая часть шапки «Мастерская» тоже открывает осмотр
+document.querySelector('#shop header').addEventListener('click', (e) => {
+  if (e.target.closest('button, .money')) return;
+  if (mode === 'hangar') setInspect(true);
+});
 
 function enterHangar() {
   mode = 'hangar';
