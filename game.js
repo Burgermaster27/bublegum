@@ -1786,14 +1786,14 @@ function loadLevel(i) {
 }
 // Кольцо честное, только если к нему можно подлететь по прямой и пролететь насквозь,
 // при любом положении движущихся препятствий. Иначе сдвигаем его на ближайшее свободное место.
-function ringPathClear(x, y, z) {
+function ringPathClear(x, y, z, back = 45, step = 0.6) {
   const saved = P.pos.clone(), savedQ = P.q.clone(), savedS = S;
   S = { ...S, span: Math.max(S.span, 10) };       // считаем самолёт шире, чтобы оставался запас
   P.q.identity();
   let ok = true;
-  for (let t = 0; t < 24 && ok; t += 0.6) {
+  for (let t = 0; t < 24 && ok; t += step) {
     for (const m of movers) m.update(t, 0);
-    for (let zz = z - 45; zz <= z + 35; zz += 1.5) { P.pos.set(x, y, zz); if (checkCollisions()) { ok = false; break; } }
+    for (let zz = z - back; zz <= z + 35; zz += 1.5) { P.pos.set(x, y, zz); if (checkCollisions()) { ok = false; break; } }
   }
   P.pos.copy(saved); P.q.copy(savedQ); S = savedS;
   return ok;
@@ -2598,13 +2598,54 @@ function targetFree(c, r) {
   }
   return true;
 }
+// Мишень честная, только если к ней можно подлететь по прямой на её высоте, прострелить и пролететь насквозь:
+// рельеф ниже с запасом, а путь свободен от препятствий при любом положении движущихся
+// Габарит примитива столкновений (с запасом для сегментов и тора)
+function primBox(pr) {
+  switch (pr.t) {
+    case 'cyl': return { x0: pr.x - pr.r, x1: pr.x + pr.r, y0: pr.y0, y1: pr.y1, z0: pr.z - pr.r, z1: pr.z + pr.r };
+    case 'cone': return { x0: pr.x - pr.r0, x1: pr.x + pr.r0, y0: pr.y0, y1: pr.y1, z0: pr.z - pr.r0, z1: pr.z + pr.r0 };
+    case 'sph': return { x0: pr.c.x - pr.r, x1: pr.c.x + pr.r, y0: pr.c.y - pr.r, y1: pr.c.y + pr.r, z0: pr.c.z - pr.r, z1: pr.c.z + pr.r };
+    case 'box': return { x0: pr.min.x, x1: pr.max.x, y0: pr.min.y, y1: pr.max.y, z0: pr.min.z, z1: pr.max.z };
+    case 'seg': return { x0: Math.min(pr.a.x, pr.b.x) - pr.r, x1: Math.max(pr.a.x, pr.b.x) + pr.r, y0: Math.min(pr.a.y, pr.b.y) - pr.r, y1: Math.max(pr.a.y, pr.b.y) + pr.r, z0: Math.min(pr.a.z, pr.b.z) - pr.r, z1: Math.max(pr.a.z, pr.b.z) + pr.r };
+    default: { const R = (pr.R || 0) + pr.r; return { x0: pr.c.x - R, x1: pr.c.x + R, y0: pr.c.y - R, y1: pr.c.y + R, z0: pr.c.z - pr.r, z1: pr.c.z + pr.r }; }
+  }
+}
+function targetReachable(x, y, z) {
+  for (let zz = z - 75; zz <= z + 35; zz += 3) {
+    for (const dx of [-6, 0, 6]) if (terrainH(x + dx, zz) > y - 3) return false;
+    if (waterAt(zz) && y < WATER_Y + 3) return false;
+  }
+  // Самолёт — сплошная полоса точек по размаху до ±5,5 м (больше любых крыльев) плюс киль и шасси
+  const rows = [];
+  for (let zz = z - 75; zz <= z + 35; zz += 1.2) {
+    const row = [];
+    for (let dx = -5.6; dx <= 5.61; dx += 0.7) row.push(new V3(x + dx, y, zz));
+    row.push(new V3(x, y + 1, zz), new V3(x, y - 1, zz));
+    rows.push({ zz, row });
+  }
+  const near = obstacles.filter((o) => o.zMax > z - 90 && o.zMin < z + 50);
+  // быстрый отсев: примитив сверяем только с рядами точек в пределах его габарита по z и по высоте/ширине
+  const hitPr = (pr) => {
+    const b = primBox(pr);
+    if (b.y0 > y + 2 || b.y1 < y - 2 || b.x0 > x + 6.5 || b.x1 < x - 6.5) return false;
+    return rows.some((r) => r.zz > b.z0 - 1 && r.zz < b.z1 + 1 && r.row.some((p) => hitPrim(p, pr, 0.7)));
+  };
+  const blocked = (list) => list.some((o) => o.prims.some(hitPr));
+  if (blocked(near.filter((o) => !o.update))) return false;
+  const moving = near.filter((o) => o.update);
+  if (!moving.length) return true;
+  let ok = true;
+  for (let t = 0; t < 30 && ok; t += 0.15) { for (const o of moving) o.update(t, 0); if (blocked(moving)) ok = false; }
+  return ok;
+}
 function buildTargets(idx) {
   const st = TARGET_STYLES[idx % TARGET_STYLES.length];
   const R = rng(LVL.seed * 7 + 991);
   const n = 12 + idx * 2, z0 = 220, z1 = FINISH_Z - 140;
   for (let k = 0; k < n; k++) {
     let placed = false;
-    for (let tries = 0; tries < 14 && !placed; tries++) {
+    for (let tries = 0; tries < 40 && !placed; tries++) {
       const z = z0 + (z1 - z0) * (k + 0.2 + R() * 0.6) / n;
       const x = roadX(z) * 0.4 + (R() * 2 - 1) * Math.max(20, VALLEY - 40);
       const gy = terrainH(x, z);
@@ -2614,6 +2655,7 @@ function buildTargets(idx) {
       const c = new V3(x, y, z);
       if (!targetFree(c, 2.2)) continue;
       if (!air && !targetFree(new V3(x, gy + post * 0.5, z), 0.6)) continue;
+      if (!targetReachable(x, y, z)) continue;
       const grp = new THREE.Group();
       const body = new THREE.Group();
       const r = targetBody(st, body);
@@ -2634,11 +2676,9 @@ function buildTargets(idx) {
         stand.position.set(x, gy, z);
         world.add(stand);
       }
-      // Подсветка: мягкое пульсирующее свечение вокруг мишени и значок над ней,
-      // который всегда одного размера на экране и виден издалека, даже сквозь деревья
-      const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); grp.add(halo);
-      const mark = new THREE.Sprite(TARGET_MARK_MAT); mark.position.y = r + 2.2; mark.renderOrder = 10; grp.add(mark);
-      targets.push({ grp, body, c, base: c.clone(), r, air, halo, mark, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
+      // Подсветка: пульсирующее свечение вокруг мишени
+      const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); halo.renderOrder = 10; grp.add(halo);
+      targets.push({ grp, body, c, base: c.clone(), r, air, halo, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
       placed = true;
     }
   }
@@ -2651,37 +2691,30 @@ const glowTex = (() => {
   g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(cv);
 })();
-const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc94a, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 1 });
-const TARGET_MARK_MAT = new THREE.SpriteMaterial({ map: (() => {
+// Свечение мишени рисуется поверх всего (depthTest: false), поэтому видно и сквозь деревья, скалы и дома
+// Насыщенный оранжево-красный ореол с яркой каймой: заметен и на снегу, и на небе, и на траве
+const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: (() => {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
-  const g = cv.getContext('2d');
-  g.lineJoin = 'round';
-  // «яблочко» со стрелкой вниз, с тёмной обводкой — читается на любом фоне
-  g.fillStyle = '#ff3b30'; g.strokeStyle = '#1b1b1b'; g.lineWidth = 8;
-  g.beginPath(); g.arc(64, 50, 38, 0, Math.PI * 2); g.fill(); g.stroke();
-  g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 50, 25, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#ff3b30'; g.beginPath(); g.arc(64, 50, 12, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#ffd23a'; g.beginPath(); g.moveTo(46, 94); g.lineTo(82, 94); g.lineTo(64, 122); g.closePath(); g.fill(); g.stroke();
+  const g = cv.getContext('2d'), grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,90,40,.10)'); grd.addColorStop(0.5, 'rgba(255,80,30,.28)');
+  grd.addColorStop(0.66, 'rgba(255,60,20,.85)'); grd.addColorStop(0.74, 'rgba(255,214,70,1)');
+  grd.addColorStop(0.82, 'rgba(255,60,20,.75)'); grd.addColorStop(1, 'rgba(255,60,20,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
-})(), sizeAttenuation: false, depthTest: false, depthWrite: false, fog: false, transparent: true });
+})(), depthTest: false, depthWrite: false, fog: false, transparent: true });
 function resetTargets() {
   for (const t of targets) { t.dead = false; t.hp = t.maxHp; t.grp.visible = true; t.flash = 0; t.body.scale.setScalar(1); }
 }
 function updateTargets(time, dt) {
   for (const t of targets) {
     if (t.dead) continue;
-    if (t.air) {
-      t.c.y = t.base.y + Math.sin(time * 1.1 + t.ph) * 1.2;
-      t.grp.position.y = t.c.y;
-      t.body.rotation.y = Math.sin(time * 0.7 + t.ph) * 0.5;
-    } else t.body.rotation.z = Math.sin(time * 1.6 + t.ph) * 0.06;
+    // парящие мишени не плавают по высоте, а только покачиваются — так проверенный путь к ним остаётся верным
+    if (t.air) t.body.rotation.y = Math.sin(time * 0.7 + t.ph) * 0.5; else t.body.rotation.z = Math.sin(time * 1.6 + t.ph) * 0.06;
     if (t.spin) for (const ch of t.body.children) if (ch.userData.spin) ch.rotation.y += dt * 30;
     if (t.flash > 0) { t.flash = Math.max(0, t.flash - dt); t.body.scale.setScalar(1 + t.flash * 1.6); }
-    t.halo.scale.setScalar(t.r * (3.1 + 0.5 * Math.sin(time * 4 + t.ph)));
-    // значок — только в полёте и только для мишеней впереди, чтобы не загромождать экран
-    const dz = t.c.z - P.pos.z;
-    t.mark.visible = mode === 'flight' && dz > 5 && dz < 450;
-    if (t.mark.visible) { const k = 0.065 * (1 + 0.12 * Math.sin(time * 5 + t.ph)); t.mark.scale.set(k, k, 1); t.mark.position.y = t.r + 2.2 + Math.sin(time * 3 + t.ph) * 0.4; }
+    // издалека свечение не становится меньше заметной точки на экране
+    const pulse = 1 + 0.12 * Math.sin(time * 4 + t.ph);
+    t.halo.scale.setScalar(Math.max(t.r * 3.2, camera.position.distanceTo(t.c) * 0.045) * pulse);
   }
 }
 const SHARD_GEO = new THREE.TetrahedronGeometry(0.45, 0);
@@ -3919,4 +3952,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { targets, bullets, fireGun, gunStats, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, ringPathClear, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
