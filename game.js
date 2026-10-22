@@ -77,15 +77,27 @@ const UPG = {
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
   gun: { icon: '🔫', name: 'Оружие', costs: priceList(10, 250, 1.35).map((c) => Math.max(40, Math.round(c / 4 / 10) * 10)),   // в 4 раза дешевле базовой кривой
     levels: ['Нет оружия', 'Пугач', 'Пулемёт', 'Спаренный пулемёт', 'Крыльевые пулемёты', 'Пушка', 'Спаренные пушки', 'Лазер', 'Двойной лазер', 'Плазмомёт', 'Звёздный бластер'],
-    desc: 'Стреляй по мишеням на трассе и получай за них монеты. Чем выше уровень, тем чаще и сильнее выстрелы, а снаряды сами доворачивают к цели.' },
+    desc: 'Стреляй по мишеням на трассе: за каждую сбитую — очко меткости для покупки эффектов. Чем выше уровень, тем чаще и сильнее выстрелы, а снаряды сами доворачивают к цели.' },
 };
 const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear', 'gun'];
+// Эффекты покупаются за очки меткости (1 очко за сбитую мишень), каждый отдельно и в любом порядке.
+// Цены прикинуты на средний темп ~4 сбитых мишени в минуту: от ~20 минут до ~2 часов игры
+const FX = {
+  fireworks: { icon: '🎆', name: 'Салют', cost: 80, desc: 'Сбитая мишень взрывается разноцветным фейерверком.' },
+  stardust: { icon: '✨', name: 'Звёздная пыль', cost: 160, desc: 'За самолётом тянется шлейф мерцающих звёздочек.' },
+  neon: { icon: '💡', name: 'Неоновая подсветка', cost: 260, desc: 'Светящиеся полосы на фюзеляже, огоньки на крыльях и сияние под брюхом.' },
+  gold: { icon: '👑', name: 'Золотая обшивка', cost: 360, desc: 'Фюзеляж из сияющего золота с кремовыми полосами.' },
+  rainbow: { icon: '🌈', name: 'Радужный след', cost: 480, desc: 'Самолёт оставляет за собой широкую радугу.' },
+};
+const FX_ORDER = ['fireworks', 'stardust', 'neon', 'gold', 'rainbow'];
+const fxOn = (k) => !!(save.fx[k] && save.fxOn[k]);
 
 const SAVE_KEY = 'slingplane-save-v1';
 const defaultSave = () => ({
   ver: 3, money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
   lv: { sling: 0, wings: 0, tail: 0, engine: 0, fuel: 0, aero: 0, gear: 0, gun: 0 },
   level: 0, unlocked: 0, lvBest: {}, lvDone: {},      // выбранный мир, последний открытый, рекорды и пройденные
+  hits: 0, fx: {}, fxOn: {},                           // очки меткости, купленные и включённые эффекты
 });
 let save = defaultSave();
 try {
@@ -2002,15 +2014,17 @@ function buildPlaneMesh(L) {
   const aero = L.aero, at = aero === 0 ? -1 : aero >= 15 ? 3 : tierOf(aero), asub = subOf(aero);
   const chrome = aero >= 15;
   const paint = PAINTS[aero], accent = ACCENTS[aero];
-  const mP = chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15 }) : std(paint, { roughness: 0.55 });
-  const mA = chrome ? std(0xd4a017, { metalness: 0.36, roughness: 0.2 }) : std(accent, { roughness: 0.5 });
+  const gold = fxOn('gold');
+  const goldM = std(0xe0a81c, { metalness: 0.5, roughness: 0.22, emissive: 0x3a2400, emissiveIntensity: 0.4 });
+  const mP = gold ? goldM : chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15 }) : std(paint, { roughness: 0.55 });
+  const mA = gold ? std(0xfff3c4, { roughness: 0.4 }) : chrome ? std(0xd4a017, { metalness: 0.36, roughness: 0.2 }) : std(accent, { roughness: 0.5 });
   const mDark = std(0x2b2b2b), mMetal = std(0x9aa3ad, { metalness: 0.36, roughness: 0.35 });
   const mGlass = new THREE.MeshStandardMaterial({ color: 0x9fd3ff, metalness: 0.24, roughness: 0.15, transparent: true, opacity: 0.85 });
 
   // --- Фюзеляж (обтекаемость) ---
   let bodyR = 0.45;
   if (at === -1) {
-    g.add(mesh(new THREE.BoxGeometry(0.9, 0.9, 4), std(0xb08a5a)));
+    g.add(mesh(new THREE.BoxGeometry(0.9, 0.9, 4), gold ? goldM : std(0xb08a5a)));
     g.add(mesh(new THREE.BoxGeometry(0.92, 0.1, 4.02), std(0x8c6a40), 0, 0.2, 0));
   } else if (at === 0) {
     g.add(mesh(new THREE.BoxGeometry(0.85, 0.85, 3.5), mP, 0, 0, -0.2));
@@ -2021,7 +2035,7 @@ function buildPlaneMesh(L) {
     const r0 = bodyR, pts = [new THREE.Vector2(0, -2.2)];
     for (let i = 0; i <= 12; i++) { const t = i / 12; const z = -2.2 + t * 4.4; const r = t < 0.15 ? lerp(0.16, r0 * 0.9, t / 0.15) : t > 0.85 ? r0 * (1 - (t - 0.85) / 0.15 * 0.55) : r0 * (0.9 + 0.1 * Math.sin((t - 0.15) / 0.7 * Math.PI)); pts.push(new THREE.Vector2(r, z)); }
     pts.push(new THREE.Vector2(0, 2.2));
-    g.add(mesh(new THREE.LatheGeometry(pts, 16).rotateX(Math.PI / 2), chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15, side: THREE.DoubleSide }) : std(paint, { roughness: 0.55, side: THREE.DoubleSide })));
+    g.add(mesh(new THREE.LatheGeometry(pts, 16).rotateX(Math.PI / 2), gold ? std(0xe0a81c, { metalness: 0.5, roughness: 0.22, emissive: 0x3a2400, emissiveIntensity: 0.4, side: THREE.DoubleSide }) : chrome ? std(0xf4f8fc, { metalness: 0.36, roughness: 0.15, side: THREE.DoubleSide }) : std(paint, { roughness: 0.55, side: THREE.DoubleSide })));
     const n = at === 3 ? 3 : asub;                        // гоночные полосы сверху
     for (let i = 0; i < n; i++) g.add(mesh(new THREE.BoxGeometry(0.07, 0.03, 3.4), mA, (i - (n - 1) / 2) * 0.12, r0 * 0.98, 0, false));
     for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.04, 0.12, 3.4), mA, sx * r0 * 0.99, 0, 0, false));
@@ -2247,6 +2261,24 @@ function buildPlaneMesh(L) {
     if (gl === 6 || gl === 8 || gl >= 9) for (const sx of [-1, 1]) barrel(sx * 0.3, -bodyR * 0.75, 1.1, len * 0.8, r * 0.9);   // вторая пара под носом
     if (gl >= 10) for (const sx of [-1, 1]) barrel(sx * (W > 0 ? Math.max(2.1, half * 0.7) : 0.7), wy - 0.05, 0.15, len * 0.8, r * 0.9, W > 0 ? sx : undefined);
   }
+  // --- Неоновая подсветка ---
+  if (fxOn('neon')) {
+    const nPink = new THREE.MeshBasicMaterial({ color: 0xff3df0 }), nCyan = new THREE.MeshBasicMaterial({ color: 0x3df5ff });
+    const sideX = at === -1 ? 0.47 : at === 0 ? 0.44 : bodyR + 0.02;
+    for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.05, 0.07, 3.0), nPink, sx * sideX, -0.12, -0.1, false));
+    g.add(mesh(new THREE.BoxGeometry(0.06, 0.05, 3.0), nCyan, 0, -(at === -1 ? 0.47 : bodyR + 0.02), -0.1, false));
+    // сияние под брюхом — плоское пятно, видное сверху и сбоку
+    const under = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(3, span * 0.7) + 2, 5.5).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: glowTex, color: 0x3df5ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    under.position.set(0, -0.75, 0); g.add(under);
+    if (W > 0) for (const sx of [-1, 1]) {                   // огоньки на концах крыльев (улетают вместе с крылом)
+      const tip = new THREE.Group(); tip.userData.side = sx; tip.position.set(sx * half * 0.97, -0.2 + WS.dih * half, 0.35 - WS.sweep);
+      tip.add(mesh(new THREE.SphereGeometry(0.13, 8, 6), sx > 0 ? nPink : nCyan, 0, 0, 0, false));
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: sx > 0 ? 0xff3df0 : 0x3df5ff, blending: THREE.AdditiveBlending, depthWrite: false }));
+      gl.scale.setScalar(1.4); tip.add(gl);
+      g.add(tip);
+    }
+  }
   // Крылья — отдельные части: в группу стороны уходит само крыло и всё, что висит на нём (моторы, баки)
   const wing = {};
   if (W > 0) for (const sx of [-1, 1]) {
@@ -2354,6 +2386,18 @@ const Sound = {
       o.connect(g).connect(this.master); o.start(t0 + i * 0.06); o.stop(t0 + i * 0.06 + 0.22);
     });
   },
+  // Треск салюта: серия коротких щелчков шума
+  crackle() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    for (let i = 0; i < 7; i++) {
+      const t0 = ctx.currentTime + i * 0.035 + Math.random() * 0.03;
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s.buffer = this.noise; f.type = 'highpass'; f.frequency.value = 2500;
+      g.gain.setValueAtTime(0.1, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+      s.connect(f).connect(g).connect(this.master); s.start(t0, Math.random()); s.stop(t0 + 0.05);
+    }
+  },
   thud(vol = 0.6, dur = 0.5) {
     if (!this.ctx) return;
     const ctx = this.ctx, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -2456,7 +2500,8 @@ function updateSparks(dt) {
     const k = s.life / s.max;
     s.sp.position.addScaledVector(s.vel, dt);
     s.vel.multiplyScalar(Math.max(0, 1 - dt * 3));
-    s.sp.scale.setScalar(0.6 * (1 - k * 0.7) * (0.7 + 0.3 * Math.sin(s.life * 40)));
+    s.sp.scale.setScalar((s.size || 0.6) * (1 - k * 0.7) * (0.7 + 0.3 * Math.sin(s.life * 40)));
+    if (s.grav) s.vel.y -= s.grav * dt;
     s.sp.material.opacity = 1 - k * k;
     s.sp.material.rotation += dt * 6;
     if (k >= 1) { scene.remove(s.sp); s.sp.material.dispose(); sparks.splice(i, 1); }
@@ -2717,12 +2762,95 @@ function shatterTarget(t) {
   }
   spawnSparks(t.c); spawnSparks(t.c);
   for (let i = 0; i < 4; i++) spawnPuff(t.c.clone().add(new V3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)), 0xffffff, 0.9, 0.7);
-  const prize = targetPrize(levelIdx);
-  P.targets++; P.targetCoins += prize;
+  P.targets++;
   Sound.pop();
-  toast(`🎯 +${prize}`);
+  if (fxOn('fireworks')) fireworks(t.c);
+  toast('🎯 +1');
 }
-const targetPrize = (i) => 25 + i * 10;
+
+// --- Эффекты самолёта ---
+const FW_COLORS = [0xff4f4f, 0xffd23a, 0x4fc3f7, 0x7ee36a, 0xff6bff, 0xffffff, 0xff9a2a];
+function spawnStar(pos, color, vel, max, size, grav = 0) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color, transparent: true, depthWrite: false }));
+  sp.position.copy(pos);
+  sparks.push({ sp, vel, life: 0, max, size, grav });
+  scene.add(sp);
+}
+// Салют: два залпа разноцветных звёзд, разлетающихся шаром
+function fireworks(c) {
+  const burst = (center, n, speed) => {
+    const ca = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)], cb = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+    for (let i = 0; i < n; i++) {
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u);
+      spawnStar(center, i % 2 ? ca : cb, new V3(r * Math.cos(a), u, r * Math.sin(a)).multiplyScalar(speed * (0.8 + Math.random() * 0.4)).addScaledVector(P.vel, 0.3), 1.2, 1.5, 4);
+    }
+  };
+  burst(c.clone(), 26, 16);
+  const c2 = c.clone().add(new V3(0, 4, 3));
+  setTimeout(() => { burst(c2, 20, 12); Sound.crackle(); }, 180);
+}
+// Шлейф-лента: точки пути с затуханием к хвосту; лента всегда повёрнута к камере, поэтому видна сзади.
+// rows — сколько полос поперёк (радуга — 7 цветов), width — ширина в метрах
+function makeRibbon(colors, width, n = 46) {
+  const K = colors.length + 1;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * K * 3), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * K * 4), 4));
+  const idx = [];
+  for (let i = 0; i < n - 1; i++) for (let k = 0; k < K - 1; k++) {
+    const a = i * K + k, b = (i + 1) * K + k;
+    idx.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  geo.setIndex(idx);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  m.frustumCulled = false;
+  m.visible = false;
+  scene.add(m);
+  return { m, pts: [], n, K, width, cols: colors.map((c) => new THREE.Color(c)) };
+}
+const rainbowTrail = makeRibbon([0xff3b30, 0xff9500, 0xffcc00, 0x34c759, 0x32ade6, 0x5856d6, 0xaf52de], 1.8);
+const _rs = new V3(), _rd = new V3();
+function updateRibbon(rb, src, active) {
+  if (active) {
+    const last = rb.pts[0];
+    if (!last || last.distanceToSquared(src) > 1.4) { rb.pts.unshift(src.clone()); if (rb.pts.length > rb.n) rb.pts.pop(); }
+    else last.copy(src);
+  }
+  const n = rb.pts.length;
+  rb.m.visible = n > 1;
+  if (n < 2) return;
+  const pos = rb.m.geometry.attributes.position, col = rb.m.geometry.attributes.color, K = rb.K;
+  for (let i = 0; i < n; i++) {
+    const p = rb.pts[i];
+    _rd.copy(rb.pts[Math.min(n - 1, i + 1)]).sub(rb.pts[Math.max(0, i - 1)]);
+    _rs.copy(camera.position).sub(p).cross(_rd).normalize();
+    const fade = (1 - i / (n - 1));
+    for (let k = 0; k < K; k++) {
+      const off = (k / (K - 1) - 0.5) * rb.width;
+      pos.setXYZ(i * K + k, p.x + _rs.x * off, p.y + _rs.y * off, p.z + _rs.z * off);
+      const c = rb.cols[Math.min(rb.cols.length - 1, k)];
+      col.setXYZW(i * K + k, c.r, c.g, c.b, 0.85 * fade * fade);
+    }
+  }
+  pos.needsUpdate = true; col.needsUpdate = true;
+  rb.m.geometry.setDrawRange(0, (n - 1) * (K - 1) * 6);
+}
+let dustT = 0;
+const DUST_COLORS = [0xffffff, 0xfff1a8, 0xa8f0ff, 0xffb3f0];
+function updatePlaneFx(dt, flying) {
+  _f.set(0, 0, 1).applyQuaternion(P.q);
+  const tail = _tmp2.copy(P.pos).addScaledVector(_f, -2.4);
+  if (fxOn('rainbow') && mode === 'flight') updateRibbon(rainbowTrail, tail, flying);
+  else { rainbowTrail.pts.length = 0; rainbowTrail.m.visible = false; }
+  if (fxOn('stardust') && flying) {
+    dustT += dt;
+    while (dustT > 0.03) {
+      dustT -= 0.03;
+      const p = tail.clone().add(new V3((Math.random() - 0.5) * 2.5, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 2));
+      spawnStar(p, DUST_COLORS[Math.floor(Math.random() * DUST_COLORS.length)], new V3((Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5, 0).addScaledVector(P.vel, 0.05), 1.3, 0.45);
+    }
+  }
+}
 
 // --- Снаряды ---
 const bullets = [];
@@ -3285,7 +3413,8 @@ function resetRun() {
   for (const r of rings) { r.taken = false; r.noseOk = null; r.mesh.material = std(0x38d1ff, { emissive: 0x0b5f80, roughness: 0.4 }); }
   clearFurrows();
   resetTargets(); clearBullets();
-  Object.assign(P, { targets: 0, targetCoins: 0, fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
+  rainbowTrail.pts.length = 0; rainbowTrail.m.visible = false;
+  Object.assign(P, { targets: 0, fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
   P.w.set(0, 0, 0); P.vel.set(0, 0, 0); P.turb.set(0, 0, 0);
 }
 
@@ -3401,10 +3530,10 @@ function finishResults() {
   const rows = [];
   rows.push(['Дистанция ' + dist + ' м', dist]);
   if (P.coins) rows.push([`Монеты и кольца${P.rings ? ` (колец: ${P.rings})` : ''}`, P.coins]);
-  if (P.targets) rows.push([`🎯 Мишени (${P.targets})`, P.targetCoins]);
   if (P.finished) rows.push(['🏁 Финиш!', finishBonus(levelIdx)]);
   const total = rows.reduce((s, r) => s + r[1], 0);
   save.money += total;
+  save.hits = (save.hits || 0) + P.targets;      // сбитые мишени — отдельная валюта для эффектов
   save.flights++;
   let rec = '';
   const prevBest = save.lvBest[levelIdx] || 0;
@@ -3432,7 +3561,8 @@ function finishResults() {
   };
   $('r-title').textContent = P.finished ? '🏁 ФИНИШ!' : titles[P.reason] || 'Полёт окончен';
   $('r-reason').textContent = reasons[P.reason] || '';
-  $('r-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>+${b}</td></tr>`).join('') + `<tr class="total"><td>Итого</td><td><i class="coin"></i>${total}</td></tr>`;
+  $('r-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>+${b}</td></tr>`).join('') + `<tr class="total"><td>Итого</td><td><i class="coin"></i>${total}</td></tr>`
+    + (P.targets ? `<tr class="hits"><td>🎯 Сбито мишеней — очки меткости</td><td>+${P.targets}</td></tr>` : '');
   $('r-rec').textContent = rec;
   show('result');
   hide('hud');
@@ -3471,6 +3601,26 @@ function renderShop() {
     cards.appendChild(card);
   }
   cards.querySelectorAll('button[data-k]').forEach((b) => b.addEventListener('click', () => buy(b.dataset.k)));
+  // Эффекты за очки меткости: каждый покупается отдельно, купленный можно включать и выключать
+  const head = document.createElement('div');
+  head.className = 'fx-head';
+  head.innerHTML = `<span>✨ Эффекты</span><b>🎯 ${save.hits || 0}</b>`;
+  cards.appendChild(head);
+  const note = document.createElement('div');
+  note.className = 'fx-note';
+  note.textContent = 'Очки меткости дают за каждую сбитую мишень. На них покупаются эффекты — любые, в любом порядке.';
+  cards.appendChild(note);
+  for (const key of FX_ORDER) {
+    const f = FX[key], owned = !!save.fx[key], on = fxOn(key);
+    const card = document.createElement('div');
+    card.className = 'card fx' + (on ? ' on' : '');
+    const btn = owned
+      ? `<button class="buy ${on ? 'max' : 'off'}" data-fx="${key}">${on ? '✓ Вкл' : 'Выкл'}</button>`
+      : `<button class="buy hitbuy" data-fx="${key}" ${(save.hits || 0) < f.cost ? 'disabled' : ''}>🎯 ${f.cost}</button>`;
+    card.innerHTML = `<div class="ico">${f.icon}</div><div class="name">${f.name}</div>${btn}<div class="lvl">${owned ? (on ? 'куплен · включён' : 'куплен · выключен') : 'не куплен'}</div><div class="desc">${f.desc}</div>`;
+    cards.appendChild(card);
+  }
+  cards.querySelectorAll('button[data-fx]').forEach((b) => b.addEventListener('click', () => buyFx(b.dataset.fx)));
   renderStats();
 }
 function buy(key) {
@@ -3487,6 +3637,25 @@ function buy(key) {
   placeOnSlingshot();
   renderShop();
   toast(`${UPG[key].name}: ${UPG[key].levels[save.lv[key]]}`);
+}
+function buyFx(key) {
+  const f = FX[key];
+  Sound.init();
+  if (!save.fx[key]) {
+    if ((save.hits || 0) < f.cost) return;
+    save.hits -= f.cost;
+    save.fx[key] = true; save.fxOn[key] = true;
+    Sound.pop();
+    toast(`${f.icon} ${f.name} — куплено!`);
+  } else {
+    save.fxOn[key] = !save.fxOn[key];
+    Sound.blip(save.fxOn[key] ? 660 : 440, 0.12, 'square', 0.1);
+  }
+  persist();
+  if (key === 'gold' || key === 'neon') { rebuildPlane(); placeOnSlingshot(); }
+  const sc = $('cards').scrollTop;
+  renderShop();
+  $('cards').scrollTop = sc;
 }
 function renderStats() {
   const s = computeStats(save.lv);
@@ -3587,6 +3756,8 @@ document.querySelectorAll('#dev [data-money]').forEach((b) => b.addEventListener
   save.money += +b.dataset.money; persist(); renderShop(); toast(`+${(+b.dataset.money).toLocaleString('ru-RU')}`);
 }));
 $('dev-money-zero').addEventListener('click', () => { save.money = 0; persist(); renderShop(); toast('Баланс обнулён'); });
+$('dev-hits').addEventListener('click', () => { save.hits = (save.hits || 0) + 500; persist(); renderShop(); toast('+500 🎯'); });
+$('dev-fx-zero').addEventListener('click', () => { save.hits = 0; save.fx = {}; save.fxOn = {}; persist(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Эффекты и очки меткости сброшены'); });
 $('dev-max').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
@@ -3884,6 +4055,7 @@ function frame(now) {
       plane.position.copy(P.pos);
       plane.quaternion.copy(P.q);
       if (!P.ended) fireGun(dt, inp.fire);
+      updatePlaneFx(dt, !P.ended && !P.onGround);
       animateEngines(dt, P.throttle ? 60 : Math.min(25, P.vel.length() * 0.5), P.throttle);
       if (P.throttle) {
         puffTimer += dt;
@@ -3905,6 +4077,7 @@ function frame(now) {
       P.endTime += dt;
       if (P.reason === 'finish') P.pos.addScaledVector(P.vel, dt);
       if (P.reason === 'splash') updateSinking(dt);
+      updatePlaneFx(dt, false);
       plane.position.copy(P.pos);
       plane.quaternion.copy(P.q);
       Sound.update(0, false);
@@ -3940,4 +4113,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, ringPathClear, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { fireworks, targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, ringPathClear, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };

@@ -117,6 +117,15 @@
   .buy { background: var(--gold); color: #2a2000; padding: 8px 12px; font-size: 14px; min-width: 92px; }
   .buy:disabled { background: #556; color: #aab; cursor: not-allowed; }
   .buy.max { background: var(--good); color: #062; }
+  .buy.off { background: #445; color: #dde; }
+  .buy.hitbuy { background: #ff6b5a; color: #fff; }
+  .buy.hitbuy:disabled { background: #556; color: #aab; }
+  .fx-head { display: flex; justify-content: space-between; align-items: center; margin: 8px 2px 0; font-weight: 800; font-size: 16px; }
+  .fx-head b { color: #ff8a7a; font-size: 18px; }
+  .fx-note { color: var(--muted); font-size: 12.5px; margin: -4px 2px 2px; }
+  .card.fx.on { box-shadow: inset 0 0 0 2px rgba(120, 220, 140, .45); }
+  #result tr.hits td { color: #ff8a7a; font-size: 14px; padding-top: 8px; }
+  #result tr.hits td:last-child { color: #ff8a7a; }
   #left-panel { position: absolute; top: 14px; left: 14px; width: min(330px, 40vw); background: var(--panel);
     border-radius: 16px; padding: 16px 18px; }
   #left-panel h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .5px; }
@@ -329,6 +338,10 @@
         <button class="ghost" data-money="100000">+100 000</button>
         <button class="ghost" data-money="1000000">+1 000 000</button>
         <button class="ghost" id="dev-money-zero">Обнулить баланс</button>
+      </div>
+      <div class="sbtns">
+        <button class="ghost" id="dev-hits">+500 🎯</button>
+        <button class="ghost" id="dev-fx-zero">Сбросить эффекты</button>
       </div>
       <div class="sbtns">
         <button class="ghost" id="dev-max">Всё на максимум</button>
