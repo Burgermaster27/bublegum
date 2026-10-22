@@ -3994,7 +3994,7 @@ function updateFps(dt) {
 //  Главный цикл
 // =====================================================================
 
-let last = performance.now(), simTime = 0, puffTimer = 0;
+let last = performance.now(), simTime = 0;
 let paused = false;
 function setPaused(on) {
   if (on && (mode !== 'flight' || P.ended)) return;
@@ -4057,20 +4057,6 @@ function frame(now) {
       if (!P.ended) fireGun(dt, inp.fire);
       updatePlaneFx(dt, !P.ended && !P.onGround);
       animateEngines(dt, P.throttle ? 60 : Math.min(25, P.vel.length() * 0.5), P.throttle);
-      if (P.throttle) {
-        puffTimer += dt;
-        // Дым почти неподвижен в воздухе — самолёт улетает, а за ним остаётся шлейф.
-        // У реактивных двигателей он идёт из сопел, у винтовых — из-под хвоста
-        if (puffTimer > 0.05) {
-          puffTimer = 0;
-          const fl = plane.userData.flames;
-          const srcs = fl.length ? fl : [null];
-          for (const src of srcs) {
-            if (src) src.getWorldPosition(_tmp); else { _f.set(0, 0, 1).applyQuaternion(P.q); _tmp.copy(P.pos).addScaledVector(_f, -2.2).add(_vb.set(0, -0.3, 0)); }
-            spawnPuff(_tmp, 0xffffff, src ? 0.25 : 0.3, 0.6, _vb.copy(P.vel).multiplyScalar(0.06).add(_tmp2.set((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6)));
-          }
-        }
-      }
       Sound.update(P.vel.length(), P.throttle);
       updateFlightHud();
     } else {
