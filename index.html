@@ -100,7 +100,11 @@
     justify-content: space-between; align-items: center; }
   #shop header h2 { margin: 0; font-size: 20px; }
   #shop header { cursor: pointer; }
-  #shop .money { color: var(--gold); font-size: 22px; font-weight: 800; }
+  #shop .money { color: var(--gold); font-size: 22px; font-weight: 800; white-space: nowrap; }
+  #shop .wallet { display: flex; gap: 14px; align-items: center; }
+  #shop .money.hits { color: #ff8a7a; }
+  #shop .money.hits span { margin-left: .2em; }
+  #shop header h2 { margin-right: 10px; }
   #cards { overflow-y: auto; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 9px; }
   .card { background: var(--panel-2); border-radius: 12px; padding: 11px 13px; display: grid;
     grid-template-columns: 38px 1fr auto; gap: 4px 11px; align-items: center; }
@@ -121,7 +125,7 @@
   .buy.hitbuy { background: #ff6b5a; color: #fff; }
   .buy.hitbuy:disabled { background: #556; color: #aab; }
   .fx-head { display: flex; justify-content: space-between; align-items: center; margin: 8px 2px 0; font-weight: 800; font-size: 16px; }
-  .fx-head b { color: #ff8a7a; font-size: 18px; }
+  .fx-head small { color: #ff8a7a; font-size: 13px; font-weight: 700; }
   .fx-note { color: var(--muted); font-size: 12.5px; margin: -4px 2px 2px; }
   .card.fx.on { box-shadow: inset 0 0 0 2px rgba(120, 220, 140, .45); }
   #result tr.hits td { color: #ff8a7a; font-size: 14px; padding-top: 8px; }
@@ -243,6 +247,11 @@
     #stick { width: 180px; height: 180px; }
     #tbtn { width: 108px; height: 108px; }
     #hud-warn { top: 180px; font-size: 13px; }
+    #shop header { padding: 10px 12px 8px; }
+    #shop header h2 { font-size: 17px; margin-right: 6px; }
+    #open-settings { width: 32px; height: 32px; font-size: 17px; margin-right: 8px; }
+    #shop .wallet { gap: 9px; }
+    #shop .money { font-size: 17px; }
   }
 </style>
 <script type="importmap">
@@ -313,7 +322,7 @@
     <div id="records"></div>
   </div>
   <div id="shop">
-    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="money"><i class="coin"></i><span id="s-money">0</span></div></header>
+    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="wallet"><div class="money"><i class="coin"></i><span id="s-money">0</span></div><div class="money hits" title="Очки меткости">🎯<span id="s-hits">0</span></div></div></header>
     <div id="cards"></div>
   </div>
   <div id="levelbar">

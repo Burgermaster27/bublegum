@@ -2307,7 +2307,7 @@ function rebuildPlane() {
 // =====================================================================
 
 const Sound = {
-  ctx: null, wind: null, windGain: null, eng: null, engGain: null, master: null,
+  ctx: null, wind: null, windGain: null, master: null,     // звука мотора нет — только ветер и эффекты
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     try {
@@ -2321,10 +2321,6 @@ const Sound = {
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 0.6;
       this.windGain = ctx.createGain(); this.windGain.gain.value = 0; this.windFilter = bp;
       src.connect(bp).connect(this.windGain).connect(this.master); src.start();
-      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 60;
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
-      this.engGain = ctx.createGain(); this.engGain.gain.value = 0; this.eng = o;
-      o.connect(lp).connect(this.engGain).connect(this.master); o.start();
     } catch (e) { this.ctx = null; }
   },
   setMuted(m) { if (this.master) this.master.gain.value = m ? 0 : 0.6; },
@@ -2333,8 +2329,6 @@ const Sound = {
     const t = this.ctx.currentTime;
     this.windGain.gain.setTargetAtTime(clamp(speed / 90, 0, 1) * 0.11, t, 0.15);
     this.windFilter.frequency.setTargetAtTime(300 + speed * 12, t, 0.1);
-    this.engGain.gain.setTargetAtTime(throttle ? 0.12 : 0, t, 0.05);
-    this.eng.frequency.setTargetAtTime(55 + speed * 1.4 + (throttle ? 25 : 0), t, 0.1);
   },
   blip(freq, dur = 0.12, type = 'sine', vol = 0.25) {
     if (!this.ctx) return;
@@ -3582,6 +3576,7 @@ function toast(text) {
 
 function renderShop() {
   $('s-money').textContent = save.money;
+  $('s-hits').textContent = save.hits || 0;
   const cards = $('cards');
   cards.innerHTML = '';
   for (const key of UPG_ORDER) {
@@ -3604,7 +3599,7 @@ function renderShop() {
   // Эффекты за очки меткости: каждый покупается отдельно, купленный можно включать и выключать
   const head = document.createElement('div');
   head.className = 'fx-head';
-  head.innerHTML = `<span>✨ Эффекты</span><b>🎯 ${save.hits || 0}</b>`;
+  head.innerHTML = '<span>✨ Эффекты</span><small>за очки меткости 🎯</small>';
   cards.appendChild(head);
   const note = document.createElement('div');
   note.className = 'fx-note';
