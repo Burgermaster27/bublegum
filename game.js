@@ -2808,7 +2808,7 @@ function makeRibbon(colors, width, n = 46) {
   scene.add(m);
   return { m, pts: [], n, K, width, cols: colors.map((c) => new THREE.Color(c)) };
 }
-const rainbowTrail = makeRibbon([0xff3b30, 0xff9500, 0xffcc00, 0x34c759, 0x32ade6, 0x5856d6, 0xaf52de], 1.8);
+const rainbowTrail = makeRibbon([0xff3b30, 0xff9500, 0xffcc00, 0x34c759, 0x32ade6, 0x5856d6, 0xaf52de], 0.9, 26);     // узкая, короткая и полупрозрачная — не заслоняет обзор
 const _rs = new V3(), _rd = new V3();
 function updateRibbon(rb, src, active) {
   if (active) {
@@ -2829,7 +2829,7 @@ function updateRibbon(rb, src, active) {
       const off = (k / (K - 1) - 0.5) * rb.width;
       pos.setXYZ(i * K + k, p.x + _rs.x * off, p.y + _rs.y * off, p.z + _rs.z * off);
       const c = rb.cols[Math.min(rb.cols.length - 1, k)];
-      col.setXYZW(i * K + k, c.r, c.g, c.b, 0.85 * fade * fade);
+      col.setXYZW(i * K + k, c.r, c.g, c.b, 0.45 * fade * fade);
     }
   }
   pos.needsUpdate = true; col.needsUpdate = true;
