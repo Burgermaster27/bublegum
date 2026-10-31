@@ -1,0 +1,16 @@
+{
+  "name": "Построй самолёт",
+  "short_name": "Самолёт",
+  "description": "3D-аркада: самолёт из рогатки, 10 миров, прокачка и стрельба по мишеням",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#9cc9ec",
+  "theme_color": "#2f86dc",
+  "icons": [
+    { "src": "icon192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

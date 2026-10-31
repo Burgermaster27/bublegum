@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Построй самолёт</title>
+<style>
+  :root {
+    --panel: rgba(18, 26, 38, 0.86);
+    --panel-2: rgba(32, 44, 62, 0.9);
+    --text: #f3f6fa;
+    --muted: #9fb0c4;
+    --gold: #ffcc33;
+    --accent: #4fc3f7;
+    --good: #66d17a;
+    --bad: #ff6b5b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #9cc9ec; color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; user-select: none; }
+  /* Холст закрывает весь экран, включая зоны под кнопками просмотрщика и вырезом;
+     интерфейс держится внутри безопасной области через --safe */
+  canvas { display: block; position: fixed; inset: 0; }
+  .safe { position: fixed; pointer-events: none;
+    top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px);
+    left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); }
+  .hidden { display: none !important; }
+
+  /* ---------- flight HUD ---------- */
+  #hud { pointer-events: none; }
+  .hud-box { position: absolute; background: var(--panel); border-radius: 12px; padding: 10px 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+  #hud-stats { top: 14px; left: 14px; min-width: 190px; }
+  #hud-stats .row { display: flex; justify-content: space-between; gap: 16px; font-size: 15px; line-height: 1.6; }
+  #hud-stats .row b { font-variant-numeric: tabular-nums; }
+  /* монета нарисована CSS — одинаково жёлтая на любом телефоне, в отличие от эмодзи */
+  /* монета как в игре: рифлёный край, ободок и знак доллара; SVG, чтобы на любом телефоне выглядела одинаково */
+  .coin { display: inline-block; width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin-right: .3em; border-radius: 50%;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E %3Cdefs%3E%3CradialGradient id='g' cx='38%25' cy='32%25' r='70%25'%3E%3Cstop offset='0' stop-color='%23fff1a0'/%3E%3Cstop offset='.45' stop-color='%23ffcf2e'/%3E%3Cstop offset='1' stop-color='%23e09a00'/%3E%3C/radialGradient%3E%3C/defs%3E %3Ccircle cx='16' cy='16' r='15.5' fill='%23b87900'/%3E %3Ccircle cx='16' cy='16' r='14.4' fill='none' stroke='%23f2b21b' stroke-width='2.2' stroke-dasharray='1.25 1.1'/%3E %3Ccircle cx='16' cy='16' r='12.6' fill='url%28%23g%29'/%3E %3Ccircle cx='16' cy='16' r='11.2' fill='none' stroke='%23c08400' stroke-opacity='.55' stroke-width='.9'/%3E %3Ctext x='15.4' y='22' font-family='Arial%2Csans-serif' font-weight='900' font-size='17' text-anchor='middle' fill='%23fff6c8' fill-opacity='.85'%3E%24%3C/text%3E %3Ctext x='16.2' y='22.8' font-family='Arial%2Csans-serif' font-weight='900' font-size='17' text-anchor='middle' fill='%23a86a00'%3E%24%3C/text%3E %3C/svg%3E") center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+  #hud-progress { top: 14px; left: 50%; transform: translateX(-50%); width: min(520px, 46vw); padding: 8px 12px; }
+  .prog-track { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,.15); overflow: visible; }
+  .prog-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, #4fc3f7, #66d17a); }
+  .prog-best { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--gold); }
+  .prog-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  #hud-fuel { bottom: 18px; left: 50%; transform: translateX(-50%); width: min(380px, 60vw); text-align: center; }
+  #hud-fuel .label { font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .fuel-track { height: 12px; border-radius: 6px; background: rgba(255,255,255,.15); overflow: hidden; }
+  .fuel-fill { height: 100%; background: linear-gradient(90deg, #ff8a3d, #ffd23d); width: 100%; }
+  #hud-help { bottom: 18px; left: 14px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  #hud-help kbd, .kbd { display: inline-block; min-width: 20px; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,.14);
+    color: var(--text); font-family: inherit; font-size: 12px; text-align: center; }
+  #hud-warn { top: 92px; left: 50%; transform: translateX(-50%); color: var(--bad); font-weight: 700; display: none; }
+
+  #toasts { position: fixed; top: 34%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column;
+    align-items: center; gap: 6px; pointer-events: none; }
+  .toast { font-size: 24px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.55);
+    animation: toast 1.6s ease-out forwards; }
+  @keyframes toast { 0% { opacity: 0; transform: translateY(14px) scale(.9); } 12% { opacity: 1; transform: none; }
+    75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-24px); } }
+
+  /* ---------- aim HUD ---------- */
+  #aim { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: max-content; min-width: 210px;
+    background: var(--panel); border-radius: 999px; padding: 7px 18px 8px; text-align: center; pointer-events: none; }
+  .power-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; margin-top: 5px; }
+  .power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #66d17a, #ffd23d, #ff6b5b); }
+  #aim .vals { display: flex; justify-content: center; gap: 16px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #aim .vals b { color: var(--text); }
+  #aim-hint { position: absolute; left: 50%; top: 84px; white-space: nowrap; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; animation: hint 1.6s ease-in-out infinite; }
+  @keyframes hint { 0%, 100% { transform: translate(-50%, 0); opacity: .9; } 50% { transform: translate(-50%, 10px); opacity: .55; } }
+
+  /* ---------- настройки ---------- */
+  #settings { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 14, 24, .5); z-index: 5; }
+  #settings .box { background: var(--panel); border-radius: 18px; padding: 18px 20px; width: min(420px, 92vw); max-height: 92vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px; }
+  #settings h2 { margin: 0; font-size: 20px; }
+  .srow { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; cursor: pointer; }
+  .srow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .srow input[type=checkbox] { width: 22px; height: 22px; accent-color: #ffcc33; flex: none; }
+  .seg { display: flex; background: rgba(255,255,255,.08); border-radius: 10px; padding: 3px; gap: 2px; flex: none; }
+  .seg button { background: transparent; color: var(--muted); padding: 7px 10px; font-size: 13px; border-radius: 8px; }
+  .seg button.on { background: var(--gold); color: #2a2000; }
+  .sbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ghost { background: rgba(255,255,255,.08); color: var(--muted); padding: 8px 12px; font-size: 13px; }
+  /* ---------- осмотр самолёта ---------- */
+  #inspect { pointer-events: none; }
+  #insp-back { position: absolute; top: 14px; right: 14px; pointer-events: auto; background: var(--panel); color: var(--text); font-size: 15px; padding: 10px 16px; }
+  #set-title { user-select: none; -webkit-user-select: none; }
+  #dev { border: 1px dashed rgba(255, 204, 51, .5); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #dev .dev-head { color: var(--gold); font-weight: 700; font-size: 14px; }
+    #set-close { background: var(--gold); color: #2a2000; font-size: 16px; padding: 10px; }
+  #open-settings { margin-left: auto; margin-right: 12px; background: rgba(255,255,255,.1); color: var(--text); width: 36px; height: 36px; font-size: 19px; padding: 0; }
+
+  /* ---------- hangar ---------- */
+  #hangar { pointer-events: none; }
+  #hangar > * { pointer-events: auto; }
+  #shop { position: absolute; top: 14px; right: 14px; bottom: 14px; width: min(430px, 48vw); background: var(--panel);
+    border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+  #shop header { padding: 14px 18px 10px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex;
+    justify-content: space-between; align-items: center; }
+  #shop header h2 { margin: 0; font-size: 20px; }
+  #shop header { cursor: pointer; }
+  #shop .money { color: var(--gold); font-size: 22px; font-weight: 800; white-space: nowrap; }
+  #shop .wallet { display: flex; gap: 14px; align-items: center; }
+  #shop .money.hits { color: #ff8a7a; }
+  #shop .money.hits span { margin-left: .2em; }
+  #shop header h2 { margin-right: 10px; }
+  #cards { overflow-y: auto; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+  .card { background: var(--panel-2); border-radius: 12px; padding: 11px 13px; display: grid;
+    grid-template-columns: 38px 1fr auto; gap: 4px 11px; align-items: center; }
+  .card .ico { font-size: 26px; grid-row: span 3; text-align: center; }
+  .card .name { font-weight: 700; font-size: 15px; }
+  .card .lvl { color: var(--accent); font-size: 13px; }
+  .card .desc { color: var(--muted); font-size: 12.5px; grid-column: 2 / 4; }
+  .pips { display: flex; gap: 2px; grid-column: 2 / 4; }
+  .pip { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); }
+  .pip.on { background: var(--accent); }
+  .card button { grid-row: span 2; }
+  .card.locked { opacity: .55; }
+  button { font-family: inherit; cursor: pointer; border: 0; border-radius: 10px; font-weight: 700; }
+  .buy { background: var(--gold); color: #2a2000; padding: 8px 12px; font-size: 14px; min-width: 92px; }
+  .buy:disabled { background: #556; color: #aab; cursor: not-allowed; }
+  .buy.max { background: var(--good); color: #062; }
+  .buy.off { background: #445; color: #dde; }
+  .buy.hitbuy { background: #ff6b5a; color: #fff; }
+  .buy.hitbuy:disabled { background: #556; color: #aab; }
+  .fx-head { display: flex; justify-content: space-between; align-items: center; margin: 8px 2px 0; font-weight: 800; font-size: 16px; }
+  .fx-head small { color: #ff8a7a; font-size: 13px; font-weight: 700; }
+  .fx-note { color: var(--muted); font-size: 12.5px; margin: -4px 2px 2px; }
+  .card.fx.on { box-shadow: inset 0 0 0 2px rgba(120, 220, 140, .45); }
+  #result tr.hits td { color: #ff8a7a; font-size: 14px; padding-top: 8px; }
+  #result tr.hits td:last-child { color: #ff8a7a; }
+  #left-panel { position: absolute; top: 14px; left: 14px; width: min(330px, 40vw); background: var(--panel);
+    border-radius: 16px; padding: 16px 18px; }
+  #left-panel h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .5px; }
+  #left-panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .stat { margin: 7px 0; font-size: 13px; }
+  .stat .top { display: flex; justify-content: space-between; color: var(--muted); }
+  .stat .top b { color: var(--text); }
+  .bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 3px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #4fc3f7, #66d17a); }
+  #records { margin-top: 12px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  #records b { color: var(--text); }
+  #go { position: absolute; left: calc((100vw - min(430px, 48vw) - 14px) / 2); bottom: 26px; transform: translateX(-50%);
+    background: linear-gradient(180deg, #ffd84d, #ffae1a); color: #3a2400; font-size: 24px; padding: 14px 44px;
+    border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,.3); white-space: nowrap; }
+  /* переключатель миров над кнопкой старта */
+  #levelbar { position: absolute; left: calc((100vw - min(430px, 48vw) - 14px) / 2); bottom: 100px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; background: var(--panel); border-radius: 16px; padding: 6px; width: min(360px, 44vw); }
+  #levelbar button { width: 40px; height: 48px; border-radius: 12px; background: rgba(255,255,255,.1); color: var(--text); font-size: 26px; padding: 0; flex: none; }
+  #levelbar button:disabled { opacity: .3; }
+  #lv-info { flex: 1; text-align: center; min-width: 0; }
+  #lv-name { font-weight: 800; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lv-sub { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lv-sub .done { color: var(--good); font-weight: 700; }
+  #go:disabled { filter: grayscale(1) brightness(.7); cursor: not-allowed; }
+  #go:hover { filter: brightness(1.07); }
+  .opts { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .opts label { cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .reset { background: transparent; color: var(--muted); font-size: 12px; text-decoration: underline; padding: 0; align-self: flex-start; }
+
+  /* ---------- result ---------- */
+  #result { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 14, 24, .45); }
+  #result .box { background: var(--panel); border-radius: 18px; padding: 22px 28px; width: min(420px, 92vw); text-align: center; }
+  #result h2 { margin: 0 0 4px; font-size: 28px; }
+  #result .reason { color: var(--muted); margin-bottom: 14px; }
+  #result table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  #result td { padding: 5px 0; text-align: left; }
+  #result td:last-child { text-align: right; font-weight: 700; color: var(--gold); }
+  #result tr.total td { border-top: 1px solid rgba(255,255,255,.15); font-size: 19px; padding-top: 10px; }
+  #result .rec { color: var(--good); font-weight: 700; margin-top: 8px; min-height: 1em; }
+  #result button { margin-top: 16px; background: var(--gold); color: #2a2000; font-size: 18px; padding: 11px 30px; }
+
+  #fps { position: absolute; right: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
+    padding: 3px 7px; border-radius: 6px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
+  .opts select { background: #223; color: var(--text); border: 1px solid #445; border-radius: 6px; padding: 2px 4px; font-family: inherit; }
+  /* ---------- сенсорное управление ---------- */
+  .touch-only { display: none; }
+  body.touch .touch-only { display: revert; }
+  body.touch .kb-only, body.touch #hud-help { display: none !important; }
+  canvas, #touch * { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  #touch { pointer-events: none; }
+  #stick { position: absolute; right: 16px; bottom: 16px; width: 200px; height: 200px; border-radius: 50%;
+    background: rgba(18, 26, 38, .28); border: 2px solid rgba(255,255,255,.3); pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+  #knob { width: 84px; height: 84px; border-radius: 50%; background: rgba(255,255,255,.6); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  #tbtn { position: absolute; left: 18px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255, 196, 40, .85); color: #3a2400; font-size: 17px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #tbtn.on { background: rgba(255, 120, 30, .95); color: #fff; box-shadow: 0 0 0 4px rgba(255,200,80,.55), 0 4px 16px rgba(0,0,0,.3); }
+  #tbtn.dim { opacity: .35; }
+  #fbtn { position: absolute; left: 34px; bottom: 160px; width: 92px; height: 92px; border-radius: 50%; line-height: 1.1;
+    background: rgba(231, 76, 60, .82); color: #fff; font-size: 26px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #fbtn small { display: block; font-size: 12px; font-weight: 700; }
+  #fbtn.on { background: rgba(255, 70, 50, 1); box-shadow: 0 0 0 4px rgba(255,160,120,.6), 0 4px 16px rgba(0,0,0,.3); }
+  /* кнопки просмотрщика на телефоне висят в верхних углах — сдвигаем угловые панели ниже */
+  body.touch #hud-fuel { display: none; }   /* на телефоне секунды топлива показаны прямо на кнопке мотора */
+  #tbtn { line-height: 1.15; }
+  #tbtn small { display: block; font-size: 13px; font-weight: 700; opacity: .85; font-variant-numeric: tabular-nums; }
+
+  /* телефон в альбомной ориентации */
+  @media (max-height: 520px) {
+    .hud-box { padding: 6px 10px; }
+    #hud-stats { min-width: 140px; top: 8px; left: 8px; }
+    #hud-stats .row { font-size: 12px; line-height: 1.45; }
+    #hud-progress { top: 8px; width: 40vw; padding: 6px 10px; }
+    /* слева — характеристики, справа — мастерская, между ними виден самолёт; мир и «На старт» — под левой панелью */
+    #left-panel { top: 8px; left: 8px; bottom: 116px; width: 30vw; padding: 8px 10px; overflow-y: auto; }
+    #left-panel h1 { font-size: 18px; }
+    #left-panel .sub { display: none; }
+    .stat { margin: 3px 0; font-size: 11.5px; }
+    #records { font-size: 11.5px; }
+    #shop { top: 8px; right: 8px; bottom: 8px; width: 46vw; }
+    #shop header { padding: 8px 12px; }
+    .card { padding: 8px 10px; }
+    #go { left: calc(27vw - 4px); bottom: 10px; font-size: 18px; padding: 10px 26px; }
+    #levelbar { left: calc(27vw - 4px); bottom: 62px; width: min(42vw, 360px); padding: 4px; }
+    #levelbar button { height: 38px; width: 34px; }
+    #lv-name { font-size: 14px; }
+    #result .box { padding: 12px 18px; }
+    #result h2 { font-size: 22px; }
+    #result button { margin-top: 8px; }
+    #stick { width: 170px; height: 170px; bottom: 10px; }
+    #knob { width: 72px; height: 72px; }
+    #tbtn { width: 100px; height: 100px; bottom: 14px; }
+    #fbtn { width: 80px; height: 80px; left: 128px; bottom: 20px; font-size: 22px; }
+    #shop header { padding: 7px 10px; }
+    #shop header h2 { font-size: 16px; margin-right: 6px; }
+    #open-settings { width: 30px; height: 30px; font-size: 16px; margin-right: 8px; }
+    #shop .wallet { gap: 8px; }
+    #shop .money { font-size: 16px; }
+    #cards { padding: 8px 8px 10px; gap: 7px; }
+    .card { grid-template-columns: 28px 1fr auto; gap: 3px 8px; }
+    .card .ico { font-size: 21px; }
+    .card .name { font-size: 14px; }
+    .card .lvl { font-size: 12px; }
+    .card .desc { font-size: 11.5px; }
+    .buy { min-width: 74px; padding: 6px 8px; font-size: 13px; }
+    #settings .box { padding: 12px 16px; gap: 8px; max-height: calc(100vh - 16px); }
+    #settings h2 { font-size: 17px; }
+    .srow { font-size: 14px; }
+    .srow small { font-size: 11px; }
+  }
+  /* совсем маленький телефон боком: характеристики прячем, чтобы самолёт и мастерская помещались */
+  @media (max-height: 520px) and (max-width: 700px) {
+    #left-panel { display: none; }
+    #shop { width: 52vw; }
+    #go { left: 24vw; }
+    #levelbar { left: 24vw; width: 44vw; }
+  }
+  /* ---------- пауза ---------- */
+  #pause-btn { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; pointer-events: auto;
+    background: var(--panel); color: var(--text); font-size: 15px; letter-spacing: -2px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  #pause { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 14, 24, .55); z-index: 6; }
+  #pause .box { background: var(--panel); border-radius: 18px; padding: 20px 22px; width: min(320px, 86vw); display: flex; flex-direction: column; gap: 10px; text-align: center; }
+  #pause h2 { margin: 0 0 4px; font-size: 24px; }
+  #p-resume { background: var(--gold); color: #2a2000; font-size: 18px; padding: 12px; }
+  #pause .ghost { font-size: 15px; padding: 11px; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #9cc9ec;
+    font-size: 22px; color: #123; font-weight: 700; }
+
+  /* вертикальный телефон; телефон, повёрнутый горизонтально (высота ≤ 520), получает раскладку выше */
+  @media (max-width: 760px) and (min-height: 521px) {
+    #left-panel { display: none; }
+    #shop { width: auto; left: 14px; bottom: 160px; }
+    #go { left: 50%; bottom: 20px; }
+    #levelbar { left: 50%; bottom: 94px; width: calc(100vw - 28px); }
+    #hud-help { display: none; }
+    /* вертикальный телефон: компактный HUD */
+    #hud-stats { min-width: 0; padding: 6px 10px; }
+    #hud-stats .row { font-size: 12px; line-height: 1.45; gap: 10px; }
+    #hud-progress { top: 14px; left: auto; right: 66px; transform: none; width: calc(100vw - 66px - 14px - 150px); padding: 6px 10px; }
+    .prog-labels span:first-child, .prog-labels span:last-child { display: none; }
+    .prog-labels { justify-content: center; }
+    #stick { width: 180px; height: 180px; }
+    #tbtn { width: 108px; height: 108px; }
+    #hud-warn { top: 180px; font-size: 13px; }
+    #shop header { padding: 10px 12px 8px; }
+    #shop header h2 { font-size: 17px; margin-right: 6px; }
+    #open-settings { width: 32px; height: 32px; font-size: 17px; margin-right: 8px; }
+    #shop .wallet { gap: 9px; }
+    #shop .money { font-size: 17px; }
+  }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon192.png">
+<link rel="apple-touch-icon" href="icon180.png">
+<meta name="theme-color" content="#2f86dc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Построй самолёт">
+</head>
+<body>
+<div id="loading">Загрузка...</div>
+
+<div id="hud" class="safe hidden">
+  <div id="hud-stats" class="hud-box">
+    <div class="row"><span>Скорость</span><b id="h-speed">0 км/ч</b></div>
+    <div class="row"><span>Высота</span><b id="h-alt">0 м</b></div>
+    <div class="row"><span>Дистанция</span><b id="h-dist">0 м</b></div>
+    <div class="row"><span>Мишени 🎯</span><b id="h-tg">0</b></div>
+  </div>
+  <div id="hud-progress" class="hud-box">
+    <div class="prog-track"><div class="prog-fill" id="h-prog"></div><div class="prog-best" id="h-best"></div></div>
+    <div class="prog-labels"><span>Старт</span><span id="h-togo"></span><span>Финиш 🏁</span></div>
+  </div>
+  <div id="hud-warn" class="hud-box"></div>
+  <div id="hud-fuel" class="hud-box">
+    <div class="label" id="h-fuel-label">Топливо — держи <span class="kbd">Пробел</span></div>
+    <div class="fuel-track"><div class="fuel-fill" id="h-fuel"></div></div>
+  </div>
+  <div id="hud-help" class="hud-box">
+    <kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd> — тангаж<br>
+    <kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> — крен и поворот<br>
+    <kbd>Q</kbd><kbd>E</kbd> — руль направления<br>
+    <kbd>F</kbd> / мышь — огонь · <kbd>Пробел</kbd> — двигатель<br><kbd>Esc</kbd> — пауза · <kbd>R</kbd> — закончить полёт
+  </div>
+</div>
+<div class="safe"><button id="pause-btn" class="hidden" aria-label="Пауза">❚❚</button></div>
+<div id="pause" class="hidden">
+  <div class="box">
+    <h2>Пауза</h2>
+    <button id="p-resume">Продолжить</button>
+    <button id="p-end" class="ghost">Закончить полёт</button>
+    <button id="p-hangar" class="ghost">В мастерскую без награды</button>
+  </div>
+</div>
+<div id="toasts"></div>
+<div class="safe"><div id="fps"></div></div>
+
+<div id="touch" class="safe hidden">
+  <div id="stick"><div id="knob"></div></div>
+  <button id="tbtn">Мотор</button>
+  <button id="fbtn">🎯<small>Огонь</small></button>
+</div>
+
+<div class="safe">
+<div id="aim" class="hidden">
+  <div class="vals">
+    <span title="Угол вверх">∠ <b id="a-pitch">25°</b></span>
+    <span title="Курс">⇄ <b id="a-yaw">0°</b></span>
+    <span title="Скорость запуска"><b id="a-speed">0</b> км/ч</span>
+  </div>
+  <div class="power-track"><div class="power-fill" id="a-power"></div></div>
+</div>
+<div id="aim-hint" class="hidden">Потяни вниз ↓ и отпусти</div>
+</div>
+
+<div id="hangar" class="safe hidden">
+  <div id="left-panel">
+    <h1>Построй самолёт</h1>
+    <div class="sub">Пролети 10 миров, облетая препятствия.</div>
+    <div id="stats"></div>
+    <div id="records"></div>
+  </div>
+  <div id="shop">
+    <header><h2>Мастерская</h2><button id="open-settings" title="Настройки" aria-label="Настройки">⚙</button><div class="wallet"><div class="money"><i class="coin"></i><span id="s-money">0</span></div><div class="money hits" title="Очки меткости">🎯<span id="s-hits">0</span></div></div></header>
+    <div id="cards"></div>
+  </div>
+  <div id="levelbar">
+    <button id="lv-prev" aria-label="Предыдущий мир">‹</button>
+    <div id="lv-info"><div id="lv-name"></div><div id="lv-sub"></div></div>
+    <button id="lv-next" aria-label="Следующий мир">›</button>
+  </div>
+  <button id="go">На старт ▶</button>
+</div>
+
+<div id="inspect" class="safe hidden">
+  <button id="insp-back">✕ В меню</button>
+</div>
+
+<div id="settings" class="hidden">
+  <div class="box">
+    <h2 id="set-title">Настройки</h2>
+    <div id="dev" class="hidden">
+      <div class="dev-head">🛠 Режим создателя</div>
+      <div class="sbtns">
+        <button class="ghost" data-money="10000">+10 000</button>
+        <button class="ghost" data-money="100000">+100 000</button>
+        <button class="ghost" data-money="1000000">+1 000 000</button>
+        <button class="ghost" id="dev-money-zero">Обнулить баланс</button>
+      </div>
+      <div class="sbtns">
+        <button class="ghost" id="dev-hits">+500 🎯</button>
+        <button class="ghost" id="dev-fx-zero">Сбросить эффекты</button>
+      </div>
+      <div class="sbtns">
+        <button class="ghost" id="dev-max">Всё на максимум</button>
+        <button class="ghost" id="dev-zero">Обнулить прокачку</button>
+        <button class="ghost" id="dev-worlds">Открыть все миры</button>
+      </div>
+      <div class="sbtns">
+        <button class="ghost" id="dev-lv-prev">Локация −</button>
+        <button class="ghost" id="dev-lv-next">Локация +</button>
+      </div>
+    </div>
+    <label class="srow" for="opt-invert"><span>Управление как в самолёте<small>Джойстик или W/S: «на себя» — нос вверх</small></span><input type="checkbox" id="opt-invert"></label>
+    <div class="srow"><span>Графика</span>
+      <div class="seg" id="opt-quality">
+        <button data-q="low">Низкая</button><button data-q="medium">Средняя</button><button data-q="high">Высокая</button>
+      </div>
+    </div>
+    <label class="srow" for="opt-sound"><span>Звук</span><input type="checkbox" id="opt-sound" checked></label>
+    <label class="srow" for="opt-fps"><span>Показывать FPS</span><input type="checkbox" id="opt-fps"></label>
+    <div class="sbtns">
+      <button class="ghost touch-only" id="tfull">⛶ Во весь экран</button>
+      <button class="ghost" id="reset">Сбросить прогресс</button>
+    </div>
+    <button id="set-close">Готово</button>
+  </div>
+</div>
+
+<div id="result" class="hidden">
+  <div class="box">
+    <h2 id="r-title">Полёт окончен</h2>
+    <div class="reason" id="r-reason"></div>
+    <table id="r-table"></table>
+    <div class="rec" id="r-rec"></div>
+    <button id="r-ok">В мастерскую (Enter)</button>
+  </div>
+</div>
+
+<script src="game.bundle.js"></script>
+<script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+</body>
+</html>
