@@ -25,15 +25,6 @@
     top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px);
     left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); }
   .hidden { display: none !important; }
-  /* Установленное приложение на iPhone: iOS иногда даёт окно меньше экрана — то без полосы под часами,
-     то без полосы внизу. Скрипт ниже определяет, где не хватает, и ставит класс:
-     fix-down — окно начинается у верхнего края, но не доходит до низа: растягиваем всё вниз;
-     fix-up   — окно начинается под часами: картинку и затемнения дотягиваем вверх, кнопки остаются в окне */
-  html.fix-down canvas { height: var(--app-h) !important; }
-  html.fix-down .safe { bottom: auto; height: calc(var(--app-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
-  html.fix-down #settings, html.fix-down #result, html.fix-down #pause, html.fix-down #loading { bottom: auto; height: var(--app-h); }
-  html.fix-up canvas { top: calc(-1 * var(--app-gap)); height: var(--app-h) !important; }
-  html.fix-up #settings, html.fix-up #result, html.fix-up #pause, html.fix-up #loading { top: calc(-1 * var(--app-gap)); padding-top: var(--app-gap); box-sizing: border-box; height: var(--app-h); }
 
   /* ---------- flight HUD ---------- */
   #hud { pointer-events: none; }
@@ -289,36 +280,6 @@
     #shop .money { font-size: 17px; }
   }
 </style>
-<script>
-// Настоящая высота экрана для установленного на iPhone приложения (см. классы fix-down / fix-up в стилях)
-(function () {
-  var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var probe = null;
-  function insetTop() {
-    if (!probe) { probe = document.createElement('div'); probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none'; document.documentElement.appendChild(probe); }
-    return probe.offsetHeight;
-  }
-  function fix() {
-    var root = document.documentElement;
-    var standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
-    root.classList.remove('fix-down', 'fix-up');
-    if (!ios || !standalone) return;
-    if (scrollY || scrollX) scrollTo(0, 0);
-    var a = screen.width, b = screen.height;
-    var h = innerHeight >= innerWidth ? Math.max(a, b) : Math.min(a, b);
-    var gap = h - innerHeight;
-    if (gap <= 1) return;
-    root.style.setProperty('--app-h', h + 'px');
-    root.style.setProperty('--app-gap', gap + 'px');
-    // окно заходит под часы (есть отступ сверху) — значит, не хватает снизу; иначе — сверху
-    root.classList.add(insetTop() > 1 ? 'fix-down' : 'fix-up');
-  }
-  addEventListener('DOMContentLoaded', fix); fix();
-  addEventListener('resize', fix); addEventListener('orientationchange', function () { setTimeout(fix, 300); });
-  addEventListener('pageshow', fix);
-  var n = 0, t = setInterval(function () { fix(); if (++n > 10) clearInterval(t); }, 500);
-})();
-</script>
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
 </script>
