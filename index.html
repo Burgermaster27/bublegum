@@ -29,7 +29,7 @@
      Обыгрываем её — сверху игра начинается чёрным и плавно растворяется в небо, без резкой границы */
   #topfade { display: none; position: fixed; left: 0; right: 0; top: 0; height: 64px; pointer-events: none;   /* идёт в DOM сразу после холста — под интерфейсом */
     background: linear-gradient(to bottom, #000 0%, rgba(0,0,0,.75) 25%, rgba(0,0,0,.35) 60%, rgba(0,0,0,0) 100%); }
-  @media (display-mode: standalone), (display-mode: fullscreen) { #topfade { display: block; } }
+  @media (display-mode: standalone) and (orientation: portrait), (display-mode: fullscreen) and (orientation: portrait) { #topfade { display: block; } }   /* боком строки с часами нет */
 
   /* ---------- flight HUD ---------- */
   #hud { pointer-events: none; }
@@ -206,18 +206,19 @@
     .hud-box { padding: 6px 10px; }
     #hud-stats { min-width: 140px; top: 8px; left: 8px; }
     #hud-stats .row { font-size: 12px; line-height: 1.45; }
-    #hud-progress { top: 8px; width: 40vw; padding: 6px 10px; }
+    #hud-progress { top: 8px; width: 40%; padding: 6px 10px; }
     /* слева — характеристики, справа — мастерская, между ними виден самолёт; мир и «На старт» — под левой панелью */
-    #left-panel { top: 8px; left: 8px; bottom: 116px; width: 30vw; padding: 8px 10px; overflow-y: auto; }
+    /* ширины в % от безопасной области (.safe), а не от экрана: на iPhone с «островком» по бокам есть отступы */
+    #left-panel { top: 8px; left: 8px; bottom: 116px; width: 30%; padding: 8px 10px; overflow-y: auto; box-sizing: border-box; }
     #left-panel h1 { font-size: 18px; }
     #left-panel .sub { display: none; }
     .stat { margin: 3px 0; font-size: 11.5px; }
     #records { font-size: 11.5px; }
-    #shop { top: 8px; right: 8px; bottom: 8px; width: 46vw; }
+    #shop { top: 8px; right: 8px; bottom: 8px; width: 46%; }
     #shop header { padding: 8px 12px; }
     .card { padding: 8px 10px; }
-    #go { left: calc(27vw - 4px); bottom: 10px; font-size: 18px; padding: 10px 26px; }
-    #levelbar { left: calc(27vw - 4px); bottom: 62px; width: min(42vw, 360px); padding: 4px; }
+    #go { left: calc(27% - 4px); bottom: 10px; font-size: 18px; padding: 10px 26px; }
+    #levelbar { left: calc(27% - 4px); bottom: 62px; width: min(calc(54% - 28px), 360px); padding: 4px; box-sizing: border-box; }
     #levelbar button { height: 38px; width: 34px; }
     #lv-name { font-size: 14px; }
     #result .box { padding: 12px 18px; }
@@ -247,9 +248,9 @@
   /* совсем маленький телефон боком: характеристики прячем, чтобы самолёт и мастерская помещались */
   @media (max-height: 520px) and (max-width: 700px) {
     #left-panel { display: none; }
-    #shop { width: 52vw; }
-    #go { left: 24vw; }
-    #levelbar { left: 24vw; width: 44vw; }
+    #shop { width: 52%; }
+    #go { left: calc(24% - 4px); }
+    #levelbar { left: calc(24% - 4px); width: calc(48% - 24px); }
   }
   /* ---------- пауза ---------- */
   #pause-btn { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; pointer-events: auto;
