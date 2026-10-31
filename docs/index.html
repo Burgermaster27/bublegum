@@ -25,6 +25,11 @@
     top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px);
     left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); }
   .hidden { display: none !important; }
+  /* Установленное приложение: над игрой сплошная чёрная строка с часами (iOS иначе оставляет зазор).
+     Обыгрываем её — сверху игра начинается чёрным и плавно растворяется в небо, без резкой границы */
+  #topfade { display: none; position: fixed; left: 0; right: 0; top: 0; height: 64px; pointer-events: none;   /* идёт в DOM сразу после холста — под интерфейсом */
+    background: linear-gradient(to bottom, #000 0%, rgba(0,0,0,.75) 25%, rgba(0,0,0,.35) 60%, rgba(0,0,0,0) 100%); }
+  @media (display-mode: standalone), (display-mode: fullscreen) { #topfade { display: block; } }
 
   /* ---------- flight HUD ---------- */
   #hud { pointer-events: none; }
@@ -291,6 +296,7 @@
 </head>
 <body>
 <div id="loading">Загрузка...</div>
+<div id="topfade"></div>
 
 <div id="hud" class="safe hidden">
   <div id="hud-stats" class="hud-box">
