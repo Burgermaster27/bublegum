@@ -20,7 +20,7 @@
     font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; user-select: none; }
   /* Холст закрывает весь экран, включая зоны под кнопками просмотрщика и вырезом;
      интерфейс держится внутри безопасной области через --safe */
-  canvas { display: block; position: fixed; inset: 0; }
+  canvas { display: block; position: fixed; top: 0; left: 0; width: 100% !important; height: 100% !important; }
   .safe { position: fixed; pointer-events: none;
     top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px);
     left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); }
@@ -286,7 +286,7 @@
 <meta name="theme-color" content="#2f86dc">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Построй самолёт">
 </head>
 <body>

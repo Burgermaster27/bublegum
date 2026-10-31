@@ -190,7 +190,7 @@ function gunStats(g) {
 // =====================================================================
 
 const renderer = new THREE.WebGLRenderer({ antialias: save.quality === 'high', powerPreference: 'high-performance' });
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = true;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -202,11 +202,19 @@ const SKY_BOTTOM = new THREE.Color(0xcfe6f7);
 scene.fog = new THREE.Fog(SKY_BOTTOM, 260, 1100);
 
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 2600);
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+// Полотно растянуто на весь экран через CSS, а размер картинки берём у самого полотна.
+// innerHeight в установленном на iPhone приложении бывает меньше экрана — снизу оставалась полоса фона.
+// Проверяем каждый кадр: iOS меняет размер с задержкой, иногда без события resize
+let VW = innerWidth, VH = innerHeight;
+function fitRenderer() {
+  const el = renderer.domElement;
+  const w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight;
+  if (w === VW && h === VH) return;
+  VW = w; VH = h;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
+  renderer.setSize(w, h, false);
+}
 
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(900, 32, 16),
@@ -3897,7 +3905,7 @@ function updateViewOffset(dt) {
     if (shop.left > innerWidth * 0.3) target = innerWidth / 2 - (left + shop.left) / 2;
   }
   viewOff = lerp(viewOff, target, 1 - Math.exp(-dt * 6));
-  if (Math.abs(viewOff) > 0.5) { camera.setViewOffset(innerWidth, innerHeight, viewOff, 0, innerWidth, innerHeight); viewOffSet = true; }
+  if (Math.abs(viewOff) > 0.5) { camera.setViewOffset(VW, VH, viewOff, 0, VW, VH); viewOffSet = true; }
   else if (viewOffSet) { camera.clearViewOffset(); viewOffSet = false; }
 }
 
@@ -4028,6 +4036,7 @@ function frame(now) {
   last = now;
   simTime += dt;
   updateFps(dt);
+  fitRenderer();
   updateTouchUi();
 
   for (const m of movers) m.update(simTime, dt);
