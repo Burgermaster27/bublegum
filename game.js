@@ -3113,6 +3113,32 @@ function addFurrow(pos, heading, n) {
 }
 function clearFurrows() { for (const g of furrows) scene.remove(g); furrows.length = 0; }
 
+// Точки корпуса для касания земли (в системе самолёта: +x — левое крыло, +y — верх, +z — нос)
+const HULL = [[0, 0, 2.2], [0, 0, -2.2], [0, -0.45, 1.8], [0, -0.45, -1.9], [0, 0.45, 1.6], [0, 0.45, -1.9], [0.45, 0, 1.8], [-0.45, 0, 1.8], [0.45, 0, -1.9], [-0.45, 0, -1.9], [0.45, -0.4, 0], [-0.45, -0.4, 0]];
+const _hp = new V3();
+// Высота земли под точкой: настил моста или рельеф; над водой — null (там самолёт тонет по центру)
+function groundAt(x, z) {
+  const bw = bridgeAt(z);
+  if (bw && Math.abs(x - roadBase(bw.z)) < 3.1) return bridgeDeckY(bw, z);
+  const h = terrainH(x, z);
+  return waterAt(z) && h < WATER_Y ? null : h;
+}
+function lowestPoint() {
+  const dm = P.dmg || {}, half = S.span / 2;
+  let best = null;
+  const test = (x, y, z) => {
+    _hp.set(x, y, z).applyQuaternion(P.q).add(P.pos);
+    const g = groundAt(_hp.x, _hp.z);
+    if (g === null) return;
+    const d = _hp.y - g;
+    if (!best || d < best.gap) best = { gap: d, z };
+  };
+  for (const p of HULL) test(p[0], p[1], p[2]);
+  if (save.lv.tail > 0 && !dm.tail) test(0, 1.05, -2.0);                    // верхушка киля
+  if (half > 0) { if (!dm.wingL) test(half * 0.95, -0.15, 0.3); if (!dm.wingR) test(-half * 0.95, -0.15, 0.3); }
+  return best;
+}
+
 // Поверхность под точкой: рельеф, настил моста или вода
 function groundContact(dt) {
   const bw = bridgeAt(P.pos.z);
@@ -3124,10 +3150,16 @@ function groundContact(dt) {
   const clearance = S.gear ? 1.15 : 0.5;
   // Севший на брюхо крылатый самолёт уже не взлетит: прижимаем его к земле до остановки
   if (P.bellyDown && !inRiver) P.pos.y = Math.min(P.pos.y, surf + clearance);
-  if (P.pos.y - clearance > surf) {
-    if (P.onGround && P.pos.y - clearance > surf + 0.4) P.onGround = false;
+  // Зазор до земли: по центру (с учётом шасси) и по точкам корпуса — нос, хвост, киль, концы крыльев.
+  // Берём самую низкую, чтобы при наклоне ни одна часть не проваливалась под землю
+  let gap = P.pos.y - clearance - surf;
+  const low = inRiver ? null : lowestPoint();
+  if (low && low.gap < gap) gap = low.gap;
+  if (gap > 0) {
+    if (P.onGround && gap > 0.4) P.onGround = false;
     return;
   }
+  const lift = -gap;          // насколько поднять самолёт, чтобы ничего не было под землёй
   const vy = -P.vel.y;
   _u.set(0, 1, 0).applyQuaternion(P.q);
   _f.set(0, 0, 1).applyQuaternion(P.q);
@@ -3135,7 +3167,7 @@ function groundContact(dt) {
 
   const crashVy = S.gear ? 24 : 20;
   if (!P.onGround) {
-    if (vy > crashVy || (_u.y < -0.2 && vy > 6) || (_f.y < -0.75 && vy > 12)) { P.pos.y = surf + clearance; endFlight('crash', 'Удар о землю'); return; }
+    if (vy > crashVy || (_u.y < -0.2 && vy > 6) || (_f.y < -0.75 && vy > 12)) { P.pos.y += lift; endFlight('crash', 'Удар о землю'); return; }
     // Отскакивает только бескрылая «коробка» и самолёт на шасси;
     // крылатый без шасси садится на брюхо и пашет землю
     if (vy > 4.5 && (S.gear || S.liftK === 0 || S.damaged)) {
@@ -3145,7 +3177,9 @@ function groundContact(dt) {
       P.w.multiplyScalar(0.5);
       P.w.x += (Math.random() - 0.5) * 2;
       P.bounces++;
-      P.pos.y = surf + clearance;
+      P.pos.y += lift;
+      // ударился носом или хвостом — отскок с переворотом в сторону ровного положения
+      if (low && low.gap <= gap + 0.01 && Math.abs(low.z) > 1) P.w.x += -Math.sign(low.z) * Math.min(3, vy * 0.18);
       Sound.thud(0.5, 0.3);
       for (let i = 0; i < 5; i++) spawnPuff(P.pos.clone().add(new V3((Math.random() - 0.5) * 2, -0.5, 0)), 0xc9b48a, 1, 1);
       if (P.bounces <= 6) toast('Отскок!');
@@ -3160,7 +3194,7 @@ function groundContact(dt) {
       P.w.set(0, 0, 0);
     }
   }
-  P.pos.y = surf + clearance;
+  P.pos.y += lift;
   if (P.vel.y < 0) P.vel.y = 0;
   // Трение качения / скольжения
   const hv = Math.hypot(P.vel.x, P.vel.z);
@@ -3223,12 +3257,12 @@ function hitPrim(p, pr, rad) {
   }
   return false;
 }
-const probes = Array.from({ length: 7 }, () => new V3());
+const probes = Array.from({ length: 8 }, () => new V3());
 // Датчики столкновений по частям: корпус и нос — крушение, крыло или хвост — только эта часть отваливается.
-// Возвращает null или что задето: 'body', 'wingL', 'wingR', 'tail'
-const PROBE_PART = ['body', 'body', 'wingL', 'wingR', 'wingL', 'wingR', 'tail'];
-const PROBE_R = [0.75, 0.5, 0.4, 0.4, 0.4, 0.4, 0.45];
-const probeOn = new Array(7).fill(false);
+// Возвращает null или что задето: 'body', 'wingL', 'wingR', 'tail' (хвостовое оперение), 'scrape' (хвост без оперения)
+const PROBE_PART = ['body', 'body', 'wingL', 'wingR', 'wingL', 'wingR', 'tail', 'tail'];
+const PROBE_R = [0.75, 0.5, 0.4, 0.4, 0.4, 0.4, 0.45, 0.35];
+const probeOn = new Array(8).fill(false);
 function checkCollisions() {
   const pz = P.pos.z;
   _l.set(1, 0, 0).applyQuaternion(P.q);
@@ -3243,19 +3277,39 @@ function checkCollisions() {
     probes[2].copy(P.pos).addScaledVector(_l, half); probes[3].copy(P.pos).addScaledVector(_l, -half);
     probes[4].copy(P.pos).addScaledVector(_l, half * 0.5); probes[5].copy(P.pos).addScaledVector(_l, -half * 0.5);
   }
-  probeOn[6] = save.lv.tail > 0 && !dm.tail;
-  probes[6].copy(P.pos).addScaledVector(_f, -2.0).addScaledVector(_u.set(0, 1, 0).applyQuaternion(P.q), 0.4);
+  // хвост: задняя часть корпуса есть всегда, верхушка киля — пока оперение цело
+  const hasTail = save.lv.tail > 0 && !dm.tail;
+  _u.set(0, 1, 0).applyQuaternion(P.q);
+  probeOn[6] = true;
+  probes[6].copy(P.pos).addScaledVector(_f, -2.0).addScaledVector(_u, 0.3);
+  probeOn[7] = hasTail;
+  probes[7].copy(P.pos).addScaledVector(_f, -2.0).addScaledVector(_u, 1.0);
   let part = null;
   for (const o of obstacles) {
     if (o.zMin > pz + 12) break;
     if (o.zMax < pz - 12) continue;
-    for (const pr of o.prims) for (let i = 0; i < 7; i++) {
+    for (const pr of o.prims) for (let i = 0; i < 8; i++) {
       if (!probeOn[i] || !hitPrim(probes[i], pr, PROBE_R[i])) continue;
       if (PROBE_PART[i] === 'body') return 'body';
-      part = part || PROBE_PART[i];
+      part = part || (PROBE_PART[i] === 'tail' && !hasTail ? 'scrape' : PROBE_PART[i]);
     }
   }
   return part;
+}
+// Зацеп хвостом: хорошее оперение чаще выдерживает удар (с 85% шанса отвалиться на 1-м уровне до 25% на последнем).
+// Если устоял — самолёт получает толчок, нос клюёт, летим дальше
+function tailHit(part) {
+  if (P.tailCD > 0) return;
+  P.tailCD = 0.5;
+  const tt = save.lv.tail > 0 ? (save.lv.tail - 1) / 14 : 0;
+  if (part === 'tail' && Math.random() < 0.85 - tt * 0.6) { breakPart('tail'); return; }
+  P.w.x += 1.2 + Math.random() * 0.8; P.w.y += (Math.random() - 0.5) * 1.5;
+  P.vel.multiplyScalar(0.92); P.vel.y += 1.5;
+  _f.set(0, 0, 1).applyQuaternion(P.q);
+  const at = P.pos.clone().addScaledVector(_f, -2.1);
+  for (let i = 0; i < 5; i++) spawnPuff(at.clone().add(new V3((Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5)), i % 2 ? 0x999999 : 0xffc060, 0.5, 0.6);
+  Sound.thud(0.35, 0.25);
+  toast(part === 'tail' ? 'Задел хвостом — устоял!' : 'Задел хвостом!');
 }
 // Часть отвалилась: модель отделяется и падает обломком, характеристики самолёта пересчитываются
 function breakPart(part) {
@@ -3416,7 +3470,7 @@ function resetRun() {
   clearFurrows();
   resetTargets(); clearBullets();
   rainbowTrail.pts.length = 0; rainbowTrail.m.visible = false;
-  Object.assign(P, { targets: 0, fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
+  Object.assign(P, { targets: 0, tailCD: 0, fuel: S.fuel, throttle: false, onGround: false, stopTimer: 0, ended: false, maxZ: 0, coins: 0, rings: 0, bounces: 0, landed: false, finished: false, time: 0, reason: '', airTime: 0, bellyDown: false, unlockedNew: false, liquid: '' });
   P.w.set(0, 0, 0); P.vel.set(0, 0, 0); P.turb.set(0, 0, 0);
 }
 
@@ -4059,11 +4113,13 @@ function frame(now) {
       acc += dt;
       while (acc >= STEP && !P.ended) {
         physicsStep(STEP, inp);
+        if (P.tailCD > 0) P.tailCD -= STEP;
         P.time += STEP;
         P.maxZ = Math.max(P.maxZ, P.pos.z);
         if (!P.ended) {
           const hit = checkCollisions();
           if (hit === 'body') endFlight('crash', 'Столкновение с препятствием');
+          else if (hit === 'tail' || hit === 'scrape') tailHit(hit);
           else if (hit) breakPart(hit);
         }
         if (!P.ended && P.pos.z >= FINISH_Z && !P.finished) { P.finished = true; Sound.blip(523, 0.2); setTimeout(() => Sound.blip(659, 0.2), 150); setTimeout(() => Sound.blip(784, 0.4), 300); endFlight('finish'); }
@@ -4119,4 +4175,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { fireworks, targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { tailHit, get lowestPoint() { return lowestPoint; }, fireworks, targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
