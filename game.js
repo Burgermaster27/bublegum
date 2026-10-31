@@ -800,6 +800,7 @@ function stripedSphere(r, colA, colB, stripes) {
 const BALLOON_COLORS = [[0xe74c3c, 0xf1c40f], [0x3498db, 0xffffff], [0x9b59b6, 0xf39c12], [0x2ecc71, 0xf9e79f], [0xe67e22, 0x34495e]];
 // glow — светящийся фонарик (ночной мир), s — размер
 function addBalloon(x, z, baseY, phase, ci, s = 1, glowing = false) {
+  if (nearWallGap(z)) return;
   const gy = terrainH(x, z) + baseY;
   const grp = new THREE.Group();
   const pal = LVL.balloonPal || BALLOON_COLORS;
@@ -829,6 +830,7 @@ function addBalloon(x, z, baseY, phase, ci, s = 1, glowing = false) {
 }
 
 function addBlimp(x, z, y, amp, phase) {
+  if (nearWallGap(z)) return;
   const grp = new THREE.Group();
   const body = mesh(new THREE.SphereGeometry(6, 20, 12), std(0xc9ced6, { metalness: 0.25, roughness: 0.5, flatShading: false }));
   body.scale.set(2.3, 1, 1); grp.add(body);
@@ -853,6 +855,7 @@ function addBlimp(x, z, y, amp, phase) {
 }
 
 function addFloatingRock(x, z, y, s, seed, st = LVL.floater || LEVELS[0].floater, house = false) {
+  if (nearWallGap(z)) return;
   const grp = new THREE.Group();
   const g = jitter(new THREE.DodecahedronGeometry(s, 1), s * 0.3, seed);
   const rock = mesh(g, std(st.rock));
@@ -910,7 +913,12 @@ function addPowerLine(z) {
   addObstacle(prims);
 }
 
+const wallGaps = [];       // проёмы всех стен уровня
+// Летающие и движущиеся препятствия (шары, дирижабли, вертолёты, птицы, парящие скалы, пончики)
+// не ставим ближе 42 м к стенам с проёмами — иначе они время от времени перекрывают проём
+const nearWallGap = (z) => wallGaps.some((g) => !g.street && Math.abs(z - g.z) < 42);
 function addWall(z, gaps, seed, st = LVL.wall) {
+  for (const g of gaps) wallGaps.push({ z, ...g });
   const X0 = -175, X1 = 175, TOP = 92, BOT = -8, TH = 9;
   const boxes = [];
   const sorted = [...gaps].sort((a, b) => a.x - b.x);
@@ -970,6 +978,7 @@ function addHouse(x, z, rot, seed) {
 }
 
 function addBirds(x, z, y, phase, colors = LVL.birds || [0x2b2b33]) {
+  if (nearWallGap(z)) return;
   const grp = new THREE.Group();
   const birds = [];
   const wingG = new THREE.BoxGeometry(1.4, 0.06, 0.45); wingG.translate(0.7, 0, 0);
@@ -1115,8 +1124,8 @@ function addBuilding(x, z, w, d, h, color, R) {
 }
 // Ряд домов поперёк улицы с одним-двумя широкими проездами
 function addBuildingsRow(z, R, d) {
-  const gapW = lerp(34, 27, d), gaps = [(R() * 2 - 1) * (VALLEY - 30)];
-  if (R() < 0.6) gaps.push(gaps[0] > 0 ? gaps[0] - 70 - R() * 30 : gaps[0] + 70 + R() * 30);
+  const gapW = lerp(34, 27, d), side = Math.min(VALLEY - 30, gapLimit(gapW)), gaps = [(R() * 2 - 1) * side];
+  if (R() < 0.6) gaps.push(clamp(gaps[0] > 0 ? gaps[0] - 70 - R() * 30 : gaps[0] + 70 + R() * 30, -side, side));
   const cols = [0x8796a8, 0xc9b79c, 0xb0b8c4, 0x9a7f6a, 0xdfe3e8, 0x6f7f95, 0xd8a48f];
   for (let x = -VALLEY - 25; x < VALLEY + 25;) {
     const w = 12 + R() * 10;
@@ -1125,7 +1134,7 @@ function addBuildingsRow(z, R, d) {
     addBuilding(x + w / 2, z, w - 1.5, 12 + R() * 6, 24 + R() * 42, cols[Math.floor(R() * cols.length)], R);
     x += w;
   }
-  for (const g of gaps) coinLine(g, 14, z - 16, g, 14, z + 16, 4);
+  for (const g of gaps) { coinLine(g, 14, z - 16, g, 14, z + 16, 4); wallGaps.push({ z, x: g, w: gapW, y0: terrainH(g, z) + 2, y1: terrainH(g, z) + 24, street: true }); }
 }
 function addCrane(x, z, R) {
   const y = terrainH(x, z), H = 40 + R() * 12, yellow = std(0xf1b81c);
@@ -1149,6 +1158,7 @@ function addCrane(x, z, R) {
   }, 32);
 }
 function addHelicopter(x, z, y, amp, ph) {
+  if (nearWallGap(z)) return;
   const grp = new THREE.Group(), col = [0xd9303a, 0x2e86de, 0xf1c40f][Math.floor(Math.abs(x) % 3)];
   const body = mesh(new THREE.SphereGeometry(2.2, 14, 10), std(col, { roughness: 0.4 })); body.scale.set(1, 0.9, 1.4); grp.add(body);
   grp.add(mesh(new THREE.SphereGeometry(1.3, 10, 8), std(0x9fd3ff, { roughness: 0.1 }), 0, 0.4, -1.8));
@@ -1218,6 +1228,7 @@ function addGumdrop(x, z, s, R) {
   addObstacle([{ t: 'sph', c: new V3(x, y - 0.3, z), r }]);
 }
 function addDonut(x, z, y, R) {
+  if (nearWallGap(z)) return;
   const icing = [0xff8ec7, 0x7a4a2a, 0xffffff, 0x9ad8ff][Math.floor(R() * 4)];
   statics.add(mesh(new THREE.TorusGeometry(7, 2.6, 10, 26), std(0xd99a5a), x, y, z));
   statics.add(mesh(new THREE.TorusGeometry(7, 2.0, 10, 26), std(icing, { roughness: 0.3 }), x, y, z - 1.1));
@@ -1581,7 +1592,7 @@ function genValley() {
   addBlimp(0, 1960, 40, 45, 0);
   addBlimp(0, 2140, 30, 55, 2);
   addBlimp(0, 2290, 52, 40, 4);
-  addWall(2400, [{ x: 10, w: 30, y0: 14, y1: 44 }, { x: -70, w: 26, y0: 40, y1: 66 }, { x: 80, w: 24, y0: 6, y1: 30 }], 57);
+  addWall(2400, [{ x: 10, w: 30, y0: 14, y1: 44 }, { x: -56, w: 26, y0: 40, y1: 66 }, { x: 60, w: 24, y0: 6, y1: 30 }], 57);
   coinLine(-40, 24, 1780, -40, 24, 1830, 6);
   coinLine(55, 43, 1790, 55, 43, 1810, 3);
   coinLine(-20, 30, 2030, 20, 30, 2080, 6, 6);
@@ -1625,11 +1636,13 @@ function genThemed(idx) {
   const wallEvery = lerp(1150, 750, d);
   for (let z = 900; z < len - 250; z += wallEvery * (0.85 + R() * 0.3)) {
     if (wet(z, 40)) z += 80;
-    const w = lerp(36, 28, d), n = R() < 0.5 + d * 0.3 ? 3 : 2, gaps = [];
-    const xs = n === 3 ? [-62, 0, 62] : [-40, 45];
+    const w = lerp(36, 28, d), side = gapLimit(w);
+    // три проёма — только если между ними остаётся стена шире 10 м (в узком каньоне — два)
+    const n = R() < 0.5 + d * 0.3 && side - w >= 10 ? 3 : 2, gaps = [];
+    const xs = n === 3 ? [-Math.min(62, side), 0, Math.min(62, side)] : [-Math.min(40, side), Math.min(45, side)];
     xs.forEach((gx, i) => {
       const y0 = i === 0 ? 6 + R() * 12 : 10 + R() * 40;
-      gaps.push({ x: gx + (R() - 0.5) * 16, w, y0, y1: y0 + lerp(32, 26, d) });
+      gaps.push({ x: clamp(gx + (R() - 0.5) * 16, -side, side), w, y0, y1: y0 + lerp(32, 26, d) });
     });
     addWall(z, gaps, Math.floor(z));
     for (const g of gaps) coinLine(g.x, (g.y0 + g.y1) / 2, z - 25, g.x, (g.y0 + g.y1) / 2, z + 15, 5);
@@ -1783,7 +1796,7 @@ function clearLevel() {
     for (const m of ms) if (!keepMats.has(m)) { m.map?.dispose?.(); m.dispose(); }
   });
   levelRoot.clear();
-  obstacles.length = 0; movers.length = 0; coins.length = 0; rings.length = 0; treeList.length = 0; targets.length = 0;
+  obstacles.length = 0; movers.length = 0; coins.length = 0; rings.length = 0; treeList.length = 0; targets.length = 0; wallGaps.length = 0;
   clearFurrows(); clearBullets();
 }
 let levelIdx = -1;
@@ -3117,13 +3130,18 @@ function physicsStep(dt, inp) {
   groundContact(dt);
 }
 
+// Ветер дует только в последних WIND_ZONE метрах перед границей; проёмы в стенах и проезды
+// всегда ставятся ближе к центру (gapLimit), чтобы ветер не мешал пролетать через них
+const WIND_ZONE = 18;
+const windStart = () => VALLEY - 6 - WIND_ZONE;
+const gapLimit = (w) => windStart() - 6 - w / 2;     // макс. |x| центра проёма шириной w (6 м — запас на крыло)
 // В горы врезаться нельзя: у края долины встречный ветер тормозит боковой снос
 // и плавно разворачивает самолёт обратно, а за невидимую границу его не пускает
 const _upY = new V3(0, 1, 0);
 function mountainWind(dt) {
   const lim = VALLEY - 6, ax = Math.abs(P.pos.x), sx = Math.sign(P.pos.x);
-  if (ax < lim - 35) return;
-  const k = clamp((ax - (lim - 35)) / 35, 0, 1);
+  if (ax < windStart()) return;
+  const k = clamp((ax - windStart()) / WIND_ZONE, 0, 1);
   if (P.vel.x * sx > 0) P.vel.x -= sx * Math.min(P.vel.x * sx, k * k * 45 * dt);
   if (!P.onGround) {
     _f.set(0, 0, 1).applyQuaternion(P.q);
@@ -3790,7 +3808,7 @@ function updateFlightHud() {
   }
   let w = '';
   if (P.pos.y > THIN_AIR) w = 'Разреженный воздух — крылья и мотор теряют силу';
-  else if (Math.abs(P.pos.x) > VALLEY - 30) w = 'Горный ветер разворачивает к трассе';
+  else if (Math.abs(P.pos.x) > windStart()) w = 'Горный ветер разворачивает к трассе';
   if (w !== warnText) { warnText = w; $('hud-warn').textContent = w; $('hud-warn').style.display = w ? 'block' : 'none'; }
 }
 
@@ -3856,8 +3874,6 @@ $('dev-max').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
 });
-$('dev-lv-prev').addEventListener('click', () => { selectLevel(levelIdx - 1, true); toast(`Локация ${clamp(levelIdx, 0, 9) + 1}`); });
-$('dev-lv-next').addEventListener('click', () => { selectLevel(levelIdx + 1, true); toast(`Локация ${clamp(levelIdx + 2, 1, 10)}`); });
 $('dev-worlds').addEventListener('click', () => { save.unlocked = LEVELS.length - 1; persist(); renderLevelBar(); toast('Все миры открыты'); });
 $('dev-zero').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = 0;
@@ -4214,4 +4230,4 @@ hide('loading');
 requestAnimationFrame(frame);
 
 // Для отладки из консоли
-window.__game = { tailHit, get lowestPoint() { return lowestPoint; }, get planeMesh() { return plane; }, fireworks, targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
+window.__game = { wallGaps, windStart, tailHit, get lowestPoint() { return lowestPoint; }, get planeMesh() { return plane; }, fireworks, targets, bullets, fireGun, updateBullets, gunStats, get plane() { return plane; }, breakPart, UPG, UPG_ORDER, computeStats, ringPathClear, movers, loadLevel, LEVELS, get FINISH_Z() { return FINISH_Z; }, get sling() { return slingGroup; }, spawnSparks, coins, obstacles, collectStuff, rings, furrows, renderer, scene, camera, THREE, physicsStep, checkCollisions, setLevels: (lv) => { Object.assign(save.lv, lv); buildSlingshot(); rebuildPlane(); }, buildPlaneMesh, P, save, S: () => S, keys, terrainH, enterAim, launch, aim, get mode() { return mode; } };
