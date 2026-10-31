@@ -3886,6 +3886,21 @@ function updateTouchUi() {
   if ($('tbtn').innerHTML !== label) $('tbtn').innerHTML = label;
 }
 
+// В мастерской панели закрывают края экрана: сдвигаем картинку так, чтобы самолёт
+// оказался посередине свободного места между левой панелью и мастерской
+let viewOff = 0, viewOffSet = false;
+function updateViewOffset(dt) {
+  let target = 0;
+  if (mode === 'hangar' && !insp.on) {
+    const shop = $('shop').getBoundingClientRect(), lp = $('left-panel');
+    const left = lp.offsetParent ? lp.getBoundingClientRect().right : 0;
+    if (shop.left > innerWidth * 0.3) target = innerWidth / 2 - (left + shop.left) / 2;
+  }
+  viewOff = lerp(viewOff, target, 1 - Math.exp(-dt * 6));
+  if (Math.abs(viewOff) > 0.5) { camera.setViewOffset(innerWidth, innerHeight, viewOff, 0, innerWidth, innerHeight); viewOffSet = true; }
+  else if (viewOffSet) { camera.clearViewOffset(); viewOffSet = false; }
+}
+
 // =====================================================================
 //  Камера
 // =====================================================================
@@ -4070,6 +4085,7 @@ function frame(now) {
     if (mode === 'result') relaxBands(dt);
   }
 
+  updateViewOffset(dt);
   if (auroraMat) auroraMat.uniforms.t.value = simTime;
   updateTargets(simTime, dt);
   updateBullets(dt);
