@@ -75,10 +75,11 @@ const UPG = {
   gear: { icon: '🛞', name: 'Шасси', costs: [180, 900, 4500],    // каждое следующее в 5 раз дороже
     levels: ['Посадка на брюхо', 'Колёса', 'Хромированное шасси', 'Золотое шасси'],
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
-  gun: { icon: '🔫', name: 'Оружие', costs: priceList(10, 250, 1.35).map((c) => Math.max(40, Math.round(c / 4 / 10) * 10)),   // в 4 раза дешевле базовой кривой
-    levels: ['Нет оружия', 'Пугач', 'Пулемёт', 'Спаренный пулемёт', 'Крыльевые пулемёты', 'Пушка', 'Спаренные пушки', 'Лазер', 'Двойной лазер', 'Плазмомёт', 'Звёздный бластер'],
-    desc: 'Стреляй по мишеням на трассе: за каждую сбитую — очко меткости для покупки эффектов. Чем выше уровень, тем чаще и сильнее выстрелы, а снаряды сами доворачивают к цели.' },
+  gun: { icon: '🔫', name: 'Оружие', costs: [0],          // цена задаётся ниже: вдвое дороже самого дорогого улучшения
+    levels: ['Нет оружия', 'Звёздный бластер'],
+    desc: 'Плазменный бластер: 14 выстрелов в секунду, снаряды сами доворачивают к мишени. Сбитая мишень исчезает навсегда и даёт очко меткости.' },
 };
+UPG.gun.costs[0] = 2 * Math.max(...Object.entries(UPG).filter(([k]) => k !== 'gun').flatMap(([, u]) => u.costs));
 const UPG_ORDER = ['sling', 'wings', 'tail', 'engine', 'fuel', 'aero', 'gear', 'gun'];
 // Эффекты покупаются за очки меткости (1 очко за сбитую мишень), каждый отдельно и в любом порядке.
 // Цены прикинуты на средний темп ~4 сбитых мишени в минуту: от ~20 минут до ~2 часов игры
@@ -90,6 +91,8 @@ const FX = {
   rainbow: { icon: '🌈', name: 'Радужный след', cost: 480, desc: 'Самолёт оставляет за собой широкую радугу.' },
 };
 const FX_ORDER = ['fireworks', 'stardust', 'neon', 'gold', 'rainbow'];
+// Цена — доля всех мишеней игры (12 в первом мире, +2 в каждом следующем): 10%, 25%, 50%, 75%, 90%
+FX_ORDER.forEach((k, i) => { FX[k].cost = Math.ceil([0.1, 0.25, 0.5, 0.75, 0.9][i] * Array.from({ length: 10 }, (_, l) => 12 + l * 2).reduce((a, b) => a + b, 0)); });
 const fxOn = (k) => !!(save.fx[k] && save.fxOn[k]);
 
 const SAVE_KEY = 'slingplane-save-v1';
@@ -97,7 +100,7 @@ const defaultSave = () => ({
   ver: 3, money: 0, best: 0, flights: 0, finishes: 0, invert: false, sound: true, quality: 'medium', showFps: false,
   lv: { sling: 0, wings: 0, tail: 0, engine: 0, fuel: 0, aero: 0, gear: 0, gun: 0 },
   level: 0, unlocked: 0, lvBest: {}, lvDone: {},      // выбранный мир, последний открытый, рекорды и пройденные
-  hits: 0, fx: {}, fxOn: {},                           // очки меткости, купленные и включённые эффекты
+  tgDone: {}, fx: {}, fxOn: {},                       // собранные мишени по мирам (номера), купленные и включённые эффекты
 });
 let save = defaultSave();
 try {
@@ -128,6 +131,7 @@ try {
       s.ver = 3;
     }
     save = { ...defaultSave(), ...s, lv: { ...defaultSave().lv, ...(s.lv || {}) } };
+    delete save.hits;      // очки меткости теперь — число собранных мишеней, отдельно не хранятся
     delete save.lv.prop;
     for (const k of UPG_ORDER) save.lv[k] = clamp(save.lv[k] | 0, 0, UPG[k].costs.length);
   }
@@ -177,7 +181,7 @@ let S = computeStats(save.lv);
 // Ступени: пулемёты (1–4) → пушки (5–6) → лазеры (7–8) → плазма (9–10)
 function gunStats(g) {
   if (g <= 0) return null;
-  const k = g - 1;
+  const k = 9;      // одна пушка — характеристики бывшего 10-го уровня («Звёздный бластер»)
   return {
     rate: 5 + k, dmg: 1 + k * 0.4, speed: 170 + g * 15, life: 1.3,
     homing: [0, 0, 0, 0.6, 0.9, 1.3, 1.8, 2.4, 3.0, 3.8][k],
@@ -2249,7 +2253,7 @@ function buildPlaneMesh(L) {
   // Дульные точки (muzzles) — пустые объекты на концах стволов; крыльевые уходят вместе с крылом
   const muzzles = [];
   if (L.gun > 0) {
-    const gl = L.gun, gt = gunStats(gl).tier;
+    const gl = 10, gt = gunStats(gl).tier;      // единственная пушка — модель «Звёздного бластера»
     const gunMat = [mDark, std(0x4a4f57, { metalness: 0.36, roughness: 0.35 }), std(0xe6ebf0, { metalness: 0.36, roughness: 0.2 }), std(0x2a1d4a, { metalness: 0.3, roughness: 0.3 })][gt];
     const tipMat = [mDark, std(0xd4a017, { metalness: 0.36, roughness: 0.25 }), std(0xff3a3a, glow(0xff2020, 1.2)), std(0x7af0ff, glow(0x40d8ff, 1.4))][gt];
     const barrel = (x, y, z, len, r, side) => {
@@ -2757,7 +2761,7 @@ function buildTargets(idx) {
       }
       // Подсветка: пульсирующее свечение вокруг мишени
       const halo = new THREE.Sprite(TARGET_HALO_MAT); halo.scale.setScalar(r * 3.4); grp.add(halo);
-      targets.push({ grp, body, c, base: c.clone(), r, air, halo, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
+      targets.push({ id: targets.length, grp, body, c, base: c.clone(), r, air, halo, hp: 0, maxHp: 2 + idx * 0.7, dead: false, ph: R() * 6.28, flash: 0, cols: st.cols, spin: st.kind === 'drone' });
       placed = true;
     }
   }
@@ -2771,8 +2775,15 @@ const glowTex = (() => {
   return new THREE.CanvasTexture(cv);
 })();
 const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc94a, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 1 });
+// Собранные мишени (сбитые хоть раз) исчезают со своих мест навсегда: номера хранятся в сохранении по мирам
+const tgList = (lv) => save.tgDone[lv] || (save.tgDone[lv] = []);
+const TARGETS_IN = (lv) => 12 + lv * 2;                       // столько мишеней ставится в мире
+const TARGETS_TOTAL = LEVELS_COUNT_TARGETS();
+function LEVELS_COUNT_TARGETS() { let n = 0; for (let i = 0; i < 10; i++) n += TARGETS_IN(i); return n; }
+const hitsTotal = () => Object.values(save.tgDone).reduce((n, a) => n + a.length, 0);   // очки меткости = собрано всего
 function resetTargets() {
-  for (const t of targets) { t.dead = false; t.hp = t.maxHp; t.grp.visible = true; t.flash = 0; t.body.scale.setScalar(1); }
+  const done = new Set(tgList(levelIdx));
+  for (const t of targets) { const gone = done.has(t.id); t.dead = gone; t.hp = t.maxHp; t.grp.visible = !gone; t.flash = 0; t.body.scale.setScalar(1); }
 }
 function updateTargets(time, dt) {
   for (const t of targets) {
@@ -2797,6 +2808,8 @@ function shatterTarget(t) {
   spawnSparks(t.c); spawnSparks(t.c);
   for (let i = 0; i < 4; i++) spawnPuff(t.c.clone().add(new V3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)), 0xffffff, 0.9, 0.7);
   P.targets++;
+  const list = tgList(levelIdx);
+  if (!list.includes(t.id)) { list.push(t.id); persist(); }     // засчитано сразу и навсегда
   Sound.pop();
   if (fxOn('fireworks')) fireworks(t.c);
   toast('🎯 +1');
@@ -3612,7 +3625,6 @@ function finishResults() {
   if (P.finished) rows.push(['🏁 Финиш!', finishBonus(levelIdx)]);
   const total = rows.reduce((s, r) => s + r[1], 0);
   save.money += total;
-  save.hits = (save.hits || 0) + P.targets;      // сбитые мишени — отдельная валюта для эффектов
   save.flights++;
   let rec = '';
   const prevBest = save.lvBest[levelIdx] || 0;
@@ -3641,7 +3653,7 @@ function finishResults() {
   $('r-title').textContent = P.finished ? '🏁 ФИНИШ!' : titles[P.reason] || 'Полёт окончен';
   $('r-reason').textContent = reasons[P.reason] || '';
   $('r-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>+${b}</td></tr>`).join('') + `<tr class="total"><td>Итого</td><td><i class="coin"></i>${total}</td></tr>`
-    + (P.targets ? `<tr class="hits"><td>🎯 Сбито мишеней — очки меткости</td><td>+${P.targets}</td></tr>` : '');
+    + (P.targets ? `<tr class="hits"><td>🎯 Собрано мишеней (очки меткости)</td><td>+${P.targets}</td></tr>` : '');
   $('r-rec').textContent = rec;
   show('result');
   hide('hud');
@@ -3661,7 +3673,7 @@ function toast(text) {
 
 function renderShop() {
   $('s-money').textContent = save.money;
-  $('s-hits').textContent = save.hits || 0;
+  $('s-hits').textContent = hitsTotal();
   const cards = $('cards');
   cards.innerHTML = '';
   for (const key of UPG_ORDER) {
@@ -3688,7 +3700,7 @@ function renderShop() {
   cards.appendChild(head);
   const note = document.createElement('div');
   note.className = 'fx-note';
-  note.textContent = 'Очки меткости дают за каждую сбитую мишень. На них покупаются эффекты — любые, в любом порядке.';
+  note.textContent = `Каждая сбитая мишень — очко меткости, всего в игре ${TARGETS_TOTAL} мишеней. Эффект открывается, когда соберёшь нужное число мишеней; очки при этом не тратятся.`;
   cards.appendChild(note);
   for (const key of FX_ORDER) {
     const f = FX[key], owned = !!save.fx[key], on = fxOn(key);
@@ -3696,7 +3708,7 @@ function renderShop() {
     card.className = 'card fx' + (on ? ' on' : '');
     const btn = owned
       ? `<button class="buy ${on ? 'max' : 'off'}" data-fx="${key}">${on ? '✓ Вкл' : 'Выкл'}</button>`
-      : `<button class="buy hitbuy" data-fx="${key}" ${(save.hits || 0) < f.cost ? 'disabled' : ''}>🎯 ${f.cost}</button>`;
+      : `<button class="buy hitbuy" data-fx="${key}" ${hitsTotal() < f.cost ? 'disabled' : ''}>🎯 ${f.cost}</button>`;
     card.innerHTML = `<div class="ico">${f.icon}</div><div class="name">${f.name}</div>${btn}<div class="lvl">${owned ? (on ? 'куплен · включён' : 'куплен · выключен') : 'не куплен'}</div><div class="desc">${f.desc}</div>`;
     cards.appendChild(card);
   }
@@ -3722,8 +3734,7 @@ function buyFx(key) {
   const f = FX[key];
   Sound.init();
   if (!save.fx[key]) {
-    if ((save.hits || 0) < f.cost) return;
-    save.hits -= f.cost;
+    if (hitsTotal() < f.cost) return;          // очки не тратятся: нужно просто собрать столько мишеней
     save.fx[key] = true; save.fxOn[key] = true;
     Sound.pop();
     toast(`${f.icon} ${f.name} — куплено!`);
@@ -3769,7 +3780,7 @@ function updateFlightHud() {
   $('h-speed').textContent = Math.round(v * 3.6) + ' км/ч';
   $('h-alt').textContent = Math.max(0, Math.round(P.pos.y - terrainH(P.pos.x, P.pos.z))) + ' м';
   $('h-dist').textContent = Math.floor(P.maxZ) + ' м';
-  $('h-tg').textContent = `${P.targets} / ${targets.length}`;
+  $('h-tg').textContent = `${tgList(levelIdx).length} / ${targets.length}`;
   $('h-prog').style.width = clamp(P.maxZ / FINISH_Z, 0, 1) * 100 + '%';
   $('h-best').style.left = clamp((save.lvBest[levelIdx] || 0) / FINISH_Z, 0, 1) * 100 + '%';
   $('h-togo').textContent = P.maxZ < FINISH_Z ? `до финиша ${Math.ceil(FINISH_Z - P.maxZ)} м` : 'финиш!';
@@ -3791,7 +3802,7 @@ function renderLevelBar() {
   $('lv-name').textContent = `${viewLevel + 1}. ${L.icon} ${L.name}`;
   const best = save.lvBest[viewLevel] || 0;
   $('lv-sub').innerHTML = open
-    ? `${L.len.toLocaleString('ru-RU')} м · рекорд ${best} м${save.lvDone[viewLevel] ? ' · <span class="done">✓ пройден</span>' : ''}`
+    ? `${L.len.toLocaleString('ru-RU')} м · рекорд ${best} м · 🎯 осталось ${TARGETS_IN(viewLevel) - tgList(viewLevel).length}${save.lvDone[viewLevel] ? ' · <span class="done">✓</span>' : ''}`
     : `🔒 Долети до финиша в мире «${LEVELS[viewLevel - 1].name}»`;
   $('lv-prev').disabled = viewLevel === 0;
   $('lv-next').disabled = viewLevel === LEVELS.length - 1;
@@ -3836,8 +3847,11 @@ document.querySelectorAll('#dev [data-money]').forEach((b) => b.addEventListener
   save.money += +b.dataset.money; persist(); renderShop(); toast(`+${(+b.dataset.money).toLocaleString('ru-RU')}`);
 }));
 $('dev-money-zero').addEventListener('click', () => { save.money = 0; persist(); renderShop(); toast('Баланс обнулён'); });
-$('dev-hits').addEventListener('click', () => { save.hits = (save.hits || 0) + 500; persist(); renderShop(); toast('+500 🎯'); });
-$('dev-fx-zero').addEventListener('click', () => { save.hits = 0; save.fx = {}; save.fxOn = {}; persist(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Эффекты и очки меткости сброшены'); });
+$('dev-hits').addEventListener('click', () => {            // отметить все мишени собранными
+  for (let i = 0; i < 10; i++) save.tgDone[i] = Array.from({ length: TARGETS_IN(i) }, (_, k) => k);
+  persist(); resetTargets(); renderShop(); toast('Все мишени собраны');
+});
+$('dev-fx-zero').addEventListener('click', () => { save.tgDone = {}; save.fx = {}; save.fxOn = {}; persist(); resetTargets(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Эффекты сброшены, мишени вернулись'); });
 $('dev-max').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = UPG[k].costs.length;
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Всё прокачано до максимума');
@@ -3847,6 +3861,8 @@ $('dev-lv-next').addEventListener('click', () => { selectLevel(levelIdx + 1, tru
 $('dev-worlds').addEventListener('click', () => { save.unlocked = LEVELS.length - 1; persist(); renderLevelBar(); toast('Все миры открыты'); });
 $('dev-zero').addEventListener('click', () => {
   for (const k of UPG_ORDER) save.lv[k] = 0;
+  save.tgDone = {};          // мишени возвращаются на места
+  resetTargets();
   persist(); buildSlingshot(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Прокачка обнулена');
 });
 $('dev').classList.toggle('hidden', !save.dev);

@@ -1,5 +1,5 @@
 // Офлайн-кэш: при первом открытии всё сохраняется на устройстве, дальше игра работает и без интернета
-const CACHE = 'postroy-samolet-c9a89567d3';
+const CACHE = 'postroy-samolet-6f1bd6eff4';
 const FILES = ['./', 'index.html', 'game.bundle.js', 'manifest.webmanifest', 'icon192.png', 'icon512.png', 'icon180.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
