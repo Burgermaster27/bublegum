@@ -53,26 +53,31 @@ function priceMult(f) {
 }
 const priceList = (n, base, g) => Array.from({ length: n }, (_, i) => Math.round(base * Math.pow(g, i) * priceMult(i / (n - 1)) / 10) * 10);
 
+// Цены откалиброваны по дальности: длина каждого мира подобрана так, что до финиша долетает только самолёт
+// с нужной прокачкой (мир 1 — около 24%, мир 20 — около 82% от максимума), а доход за полёт ≈ пройденным метрам.
+// Цена уровня — доля улучшения в дальности (бак и мотор дороже всего) × стоимость этого шага прокачки:
+// первый мир ~1 ч, каждый следующий ~на 9% дольше, все 20 миров ≈ 28 ч, полная прокачка после — добивание
+const COSTS = {sling: [150, 220, 270, 420, 850, 1700, 3100, 3800, 4500, 5200, 6100, 7100, 8200, 9500, 11000, 13000, 15000, 17000, 19000, 22000, 22000, 22000, 30000, 39000, 48000], wings: [360, 560, 670, 1000, 2100, 4300, 7800, 9500, 11000, 13000, 15000, 18000, 21000, 24000, 28000, 32000, 37000, 42000, 49000, 56000, 56000, 56000, 75000, 97000, 120000], tail: [290, 460, 1200, 3700, 6400, 8300, 11000, 14000, 18000, 22000, 28000, 36000, 36000, 50000, 75000], engine: [1100, 1700, 2000, 3100, 6400, 13000, 23000, 29000, 34000, 39000, 46000, 53000, 62000, 72000, 83000, 95000, 110000, 130000, 150000, 170000, 170000, 170000, 220000, 290000, 360000], fuel: [2700, 4400, 11000, 35000, 61000, 79000, 100000, 130000, 170000, 210000, 270000, 340000, 340000, 470000, 710000], aero: [790, 1300, 3200, 10000, 18000, 23000, 29000, 38000, 48000, 61000, 78000, 98000, 98000, 140000, 210000], gear: [9000, 54000, 170000]};
 const UPG = {
-  sling: { icon: '🪃', name: 'Рогатка', costs: priceList(25, 60, 1.16),
+  sling: { icon: '🪃', name: 'Рогатка', costs: COSTS.sling,
     levels: makeLevels('Ветка с резинкой', ['Крепкая', 'Окованная', 'Стальная', 'Королевская', 'Мифриловая'], 25, 'Небесная катапульта'),
     desc: 'Скорость, с которой самолёт вылетает из рогатки.' },
-  wings: { icon: '🪽', name: 'Крылья', costs: priceList(25, 120, 1.14),
+  wings: { icon: '🪽', name: 'Крылья', costs: COSTS.wings,
     levels: makeLevels('Нет крыльев', ['Фанерные', 'Биплан', 'Дюралевые', 'Композитные', 'Карбоновые'], 25, 'Крылья феникса'),
     desc: 'Подъёмная сила и управление по крену. Без крыльев самолёт летит как камень.' },
-  tail: { icon: '🛩️', name: 'Хвостовое оперение', costs: priceList(15, 180, 1.2),
+  tail: { icon: '🛩️', name: 'Хвостовое оперение', costs: COSTS.tail,
     levels: makeLevels('Нет хвоста', ['Деревянный киль', 'Стальное оперение', 'Двойной киль'], 15, 'Оперение аса'),
     desc: 'Устойчивость и управление по тангажу и курсу. Без хвоста самолёт рыскает и кувыркается.' },
-  engine: { icon: '🌀', name: 'Двигатель', costs: priceList(25, 380, 1.115),
+  engine: { icon: '🌀', name: 'Двигатель', costs: COSTS.engine,
     levels: makeLevels('Нет двигателя', ['Пропеллер', 'Радиальный мотор', 'Трёхмоторный', 'Импеллеры', 'Реактивный'], 25, 'Ракетный ускоритель'),
     desc: 'Тяга и максимальная скорость. Первый уровень — пропеллер, он открывает топливо.' },
-  fuel: { icon: '⛽', name: 'Топливный бак', req: 'engine', costs: priceList(15, 200, 1.27),
+  fuel: { icon: '⛽', name: 'Топливный бак', req: 'engine', costs: COSTS.fuel,
     levels: ['Фляжка', 'Канистра', 'Две канистры', 'Бак', 'Бак с насосом', 'Большой бак', 'Подвесной бак', 'Два подвесных бака', 'Крыльевые баки', 'Крыльевые баки II', 'Цистерна', 'Цистерна II', 'Золотой бак', 'Золотой бак II', 'Мега-цистерна', 'Бездонный бак'],
     desc: 'Сколько секунд может работать двигатель.' },
-  aero: { icon: '🧪', name: 'Обтекаемость', costs: priceList(15, 220, 1.18),
+  aero: { icon: '🧪', name: 'Обтекаемость', costs: COSTS.aero,
     levels: makeLevels('Коробка', ['Обтекатель', 'Гладкий фюзеляж', 'Аэродинамика PRO'], 15, 'Хромированный болид'),
     desc: 'Снижает сопротивление воздуха — дальше летишь, меньше теряешь скорость.' },
-  gear: { icon: '🛞', name: 'Шасси', costs: [180, 900, 4500],    // каждое следующее в 5 раз дороже
+  gear: { icon: '🛞', name: 'Шасси', costs: COSTS.gear,
     levels: ['Посадка на брюхо', 'Колёса', 'Хромированное шасси', 'Золотое шасси'],
     desc: 'Мягкие посадки: самолёт катится по земле, а не пашет её брюхом. Чем лучше шасси, тем дальше катится.' },
   gun: { icon: '🔫', name: 'Оружие', costs: [0],          // цена задаётся ниже: вдвое дороже самого дорогого улучшения
@@ -91,8 +96,6 @@ const FX = {
   rainbow: { icon: '🌈', name: 'Радужный след', cost: 480, desc: 'Самолёт оставляет за собой широкую радугу.' },
 };
 const FX_ORDER = ['fireworks', 'stardust', 'neon', 'gold', 'rainbow'];
-// Цена — доля всех мишеней игры (12 в первом мире, +2 в каждом следующем): 10%, 25%, 50%, 75%, 90%
-FX_ORDER.forEach((k, i) => { FX[k].cost = Math.ceil([0.1, 0.25, 0.5, 0.75, 0.9][i] * Array.from({ length: 10 }, (_, l) => 12 + l * 2).reduce((a, b) => a + b, 0)); });
 const fxOn = (k) => !!(save.fx[k] && save.fxOn[k]);
 
 const SAVE_KEY = 'slingplane-save-v1';
@@ -389,7 +392,129 @@ const LEVELS = [
     pillar: { rock: 0x46506a, cap: 0xdce8ff, tree: 'snowpine' }, wall: { rock: 0x8fb8dc, top: 0xeaf2ff, edge: 0x5ff0ff },
     floater: { rock: 0x9fc8e6, top: 0xf0f6ff, under: 0x7aa8cc }, birds: [0xdfe8ff], fillers: [['snowpine', 1]],
     feats: [['crystals', 2.5], ['lanterns', 2], ['ice', 1.5], ['snowmen', 1], ['skilift', 1.5], ['floaters', 1.5]] },
+
+  { name: 'Осенний лес', icon: '🍂', len: 1, seed: 11011,
+    ter: { amp: 1.1, dunes: 0, mtn: 120, mtnW: 50, rough: 1 }, valley: 105,
+    pal: { g: C3(0.62, 0.45, 0.2), gv: C3(0.06, 0.05, 0.03), rock: C3(0.45, 0.38, 0.32), bed: C3(0.5, 0.4, 0.28) },
+    sky: { top: 0x6a8fc8, bottom: 0xf3dcc0, fog: [240, 1050], sun: [0xffd9a8, 2.1], hemi: [0xffe2c0, 0x7a5a30, 0.95], exp: 1.05 },
+    road: 0x9a7650, waters: [{ zf: 0.42, half: 20, depth: 5, kind: 'water', bridge: true }],
+    side: [['autumn', 0.7], ['pine', 0.3]], sideMaxH: 110, tufts: 'autumn', tuftsK: 0.8, clouds: { n: 60, color: 0xffffff, em: 0x9a8a80 },
+    pillar: { rock: 0x8a6f5a, cap: 0xd9822b, tree: 'autumn' }, wall: { rock: 0x8f7a66, top: 0xc8742a, tree: 'autumn' }, arch: { rock: 0x8a705c },
+    floater: { rock: 0x8a705c, top: 0xd9822b, under: 0x6e5a4a, tree: 'autumn' }, birds: [0x3a2a20], fillers: [['autumn', 0.8], ['pine', 0.2]],
+    target: { kind: 'board', cols: [0xd9822b, 0xfff2d0], post: 0x7a4a24 },
+    feats: [['pillars', 2], ['balloons', 1.5], ['birds', 1.5], ['arch', 2], ['floaters', 1.5], ['heli', 0.5]] },
+
+  { name: 'Морское побережье', icon: '🏖️', len: 1, seed: 12121,
+    ter: { amp: 0.9, dunes: 0, mtn: 90, mtnW: 35, rough: 1 }, valley: 110,
+    pal: { g: C3(0.86, 0.8, 0.58), gv: C3(0.05, 0.05, 0.04), rock: C3(0.55, 0.55, 0.52), bed: C3(0.92, 0.86, 0.62), base: 'beach' },
+    sky: { top: 0x2a7fe0, bottom: 0xd2f0fa, fog: [300, 1150], sun: [0xfff4e0, 2.4], hemi: [0xdaf4ff, 0x8a8a6a, 0.95], exp: 1.05 },
+    road: 0xe0cf98, waters: [{ zf: 0.25, half: 24, depth: 5, kind: 'lagoon', bridge: true }, { zf: 0.55, half: 24, depth: 5, kind: 'lagoon', bridge: true }, { zf: 0.8, half: 22, depth: 5, kind: 'lagoon', bridge: true }],
+    side: [['palm', 0.5], ['round', 0.5]], sideMaxH: 100, tufts: 'jungle', tuftsK: 0.5, clouds: { n: 60, color: 0xffffff, em: 0x8a96a3 },
+    pillar: { rock: 0xf2f2f2, cap: 0xe74c3c, bands: 0xe74c3c }, wall: { rock: 0x9a9a8f, top: 0x6fae4a, tree: 'palm' }, arch: { rock: 0x9a9a8f },
+    birds: [0xffffff, 0xdddddd], fillers: [['palm', 0.5], ['round', 0.5]],
+    target: { kind: 'board', cols: [0x2f86dc, 0xffffff], post: 0xd9c08a },
+    feats: [['palms', 2], ['pillars', 2], ['arch', 1.5], ['birds', 2], ['balloons', 1.5], ['blimp', 1]] },
+
+  { name: 'Сад сакуры', icon: '🌸', len: 1, seed: 13131,
+    ter: { amp: 1.0, dunes: 0, mtn: 110, mtnW: 45, rough: 1 }, valley: 105,
+    pal: { g: C3(0.45, 0.66, 0.32), gv: C3(0.07, 0.07, 0.04), rock: C3(0.48, 0.46, 0.46), bed: C3(0.5, 0.45, 0.35) },
+    sky: { top: 0x7aa6e8, bottom: 0xfbe3ec, fog: [260, 1100], sun: [0xfff0f4, 2.2], hemi: [0xffeaf2, 0x6a7a4a, 1.0], exp: 1.05 },
+    road: 0xd8c6a8, waters: [{ zf: 0.5, half: 20, depth: 5, kind: 'water', bridge: true }],
+    side: [['sakura', 0.7], ['pine', 0.3]], sideMaxH: 120, tufts: 'blossom', tuftsK: 0.9, clouds: { n: 60, color: 0xffffff, em: 0xa898a8 },
+    pillar: { rock: 0xb8a8a0, cap: 0xffb7d0, tree: 'sakura' }, wall: { rock: 0xc0392b, top: 0x2c2c34, tree: 'sakura' }, arch: { rock: 0xc0392b },
+    floater: { rock: 0x8a8a90, top: 0xffb7d0, under: 0x6a6a70, tree: 'sakura' }, birds: [0xffffff, 0xffc0d8], fillers: [['sakura', 0.8], ['pine', 0.2]],
+    target: { kind: 'lantern', cols: [0xff5a5a, 0xffd23a, 0xfff2c0], air: true },
+    feats: [['arch', 2.5], ['lanterns', 2], ['pillars', 1.5], ['balloons', 1.5], ['birds', 1.5], ['floaters', 1]] },
+
+  { name: 'Грибной лес', icon: '🍄', len: 1, seed: 14141,
+    ter: { amp: 1.3, dunes: 0, mtn: 100, mtnW: 40, rough: 1 }, valley: 105,
+    pal: { g: C3(0.3, 0.5, 0.25), gv: C3(0.07, 0.07, 0.04), rock: C3(0.42, 0.38, 0.34), bed: C3(0.4, 0.35, 0.25) },
+    sky: { top: 0x6a7fd0, bottom: 0xe8d8f0, fog: [200, 950], sun: [0xfff0e0, 2.0], hemi: [0xf0e6ff, 0x4a5a3a, 1.0], exp: 1.05 },
+    road: 0x8a6a4a, waters: [{ zf: 0.45, half: 20, depth: 5, kind: 'water', bridge: true }],
+    side: [['mushroom', 0.6], ['round', 0.4]], sideMaxH: 110, tufts: 'jungle', tuftsK: 0.8, clouds: { n: 50, color: 0xffffff, em: 0x9a90a8 },
+    pillar: { rock: 0xf0e6d6, cap: 0xe0302a, tree: 'mushroom' }, wall: { rock: 0x7a6a5a, top: 0x3f7a3a, tree: 'mushroom' }, arch: { rock: 0x7a6a5a },
+    floater: { rock: 0xf0e6d6, top: 0xe0302a, under: 0xd8c8b0, tree: 'mushroom' }, birds: [0x9b59b6, 0x3498db], fillers: [['mushroom', 0.7], ['round', 0.3]],
+    target: { kind: 'pinata', cols: [0xe0302a, 0xffffff, 0xffd23a, 0x9b59b6], post: 0xf0e6d6 },
+    feats: [['pillars', 2], ['gumdrops', 1.5], ['floaters', 2], ['balloons', 1.5], ['birds', 1.5], ['arch', 1]] },
+
+  { name: 'Красная планета', icon: '🪐', len: 1, seed: 15151,
+    ter: { amp: 0.9, dunes: 2, mtn: 140, mtnW: 20, rough: 1.2 }, valley: 95,
+    pal: { g: C3(0.72, 0.38, 0.22), gv: C3(0.06, 0.04, 0.03), rock: C3(0.55, 0.28, 0.18), bed: C3(0.6, 0.32, 0.2), strata: true },
+    sky: { top: 0x6a3a2a, bottom: 0xe8b48a, fog: [220, 1000], sun: [0xffd2b0, 2.0], hemi: [0xffc8a8, 0x6a2a1a, 0.9], exp: 1.0, sunCol: [1.0, 0.7, 0.5] },
+    road: null, waters: [],
+    side: [['deadtree', 0.3], ['crystal', 0.7]], sideMaxH: 200, tufts: null, clouds: { n: 12, color: 0xe8b48a, em: 0x6a3a2a },
+    pillar: { rock: 0xa04a2a, cap: 0xc8683a }, wall: { rock: 0xa8552f, top: 0xc8683a }, arch: { rock: 0x9a4a2a },
+    floater: { rock: 0x8a3a20, top: 0xb85a30, under: 0x6a2a18 }, birds: [0x6a2a18], fillers: [['crystal', 1]],
+    target: { kind: 'drone', cols: [0xdfe3e8, 0xff4f4f, 0x34495e], air: true },
+    feats: [['pillars', 2.5], ['arch', 2], ['rockbridge', 1.5], ['floaters', 2], ['blimp', 1], ['crystals', 1]] },
+
+  { name: 'Луна', icon: '🌙', len: 1, seed: 16161,
+    ter: { amp: 1.6, dunes: 0, mtn: 120, mtnW: 40, rough: 1.4 }, valley: 105,
+    pal: { g: C3(0.62, 0.62, 0.66), gv: C3(0.05, 0.05, 0.05), rock: C3(0.4, 0.4, 0.44), bed: C3(0.5, 0.5, 0.54) },
+    sky: { top: 0x02030a, bottom: 0x10131c, fog: [260, 1100], sun: [0xffffff, 2.0], hemi: [0xc8d0e0, 0x202030, 0.9], exp: 1.2, night: true, noAurora: true, planet: 0x3a7ae0, planetSize: 70 },
+    road: null, waters: [],
+    side: [['crystal', 0.3], ['deadtree', 0.0001]], sideMaxH: 160, tufts: null, clouds: { n: 0, color: 0xffffff, em: 0x202030 },
+    pillar: { rock: 0xb4b4bc, cap: 0xd8d8e0 }, wall: { rock: 0xa8a8b0, top: 0xc8c8d0, edge: 0x5ff0ff }, arch: { rock: 0xb0b0b8 },
+    floater: { rock: 0x8a8a92, top: 0xb0b0b8, under: 0x6a6a72 }, birds: [0xdfe8ff], fillers: [['crystal', 1]],
+    target: { kind: 'lantern', cols: [0x7af0ff, 0xc9a0ff, 0xfff6b0], air: true },
+    feats: [['floaters', 3], ['pillars', 2], ['arch', 2], ['crystals', 1.5], ['lanterns', 1], ['blimp', 1]] },
+
+  { name: 'Коралловый риф', icon: '🐠', len: 1, seed: 17171,
+    ter: { amp: 1.4, dunes: 0, mtn: 90, mtnW: 40, rough: 1 }, valley: 105,
+    pal: { g: C3(0.9, 0.82, 0.6), gv: C3(0.05, 0.05, 0.04), rock: C3(0.3, 0.55, 0.6), bed: C3(0.2, 0.45, 0.55), base: 'beach' },
+    sky: { top: 0x0a4a7a, bottom: 0x3ab0c8, fog: [150, 850], sun: [0xbff6ff, 1.8], hemi: [0xa8f0ff, 0x2a6a7a, 1.1], exp: 1.1, sunCol: [0.6, 0.9, 1.0] },
+    road: 0xd8c890, waters: [{ zf: 0.3, half: 22, depth: 5, kind: 'lagoon', bridge: true }, { zf: 0.65, half: 22, depth: 5, kind: 'lagoon', bridge: true }],
+    side: [['coral', 0.7], ['palm', 0.3]], sideMaxH: 120, tufts: 'jungle', tuftsK: 0.6, clouds: { n: 30, color: 0xbff6ff, em: 0x3a8aa0 },
+    pillar: { rock: 0xff7a5a, cap: 0xff9ecb, tree: 'coral' }, wall: { rock: 0x2a8a9a, top: 0xff7a5a, tree: 'coral' }, arch: { rock: 0xe86a4a },
+    floater: { rock: 0x3ab0c8, top: 0xff9ecb, under: 0x2a8a9a, tree: 'coral' },
+    balloonPal: [[0xff9ecb, 0xffffff], [0xb3e6ff, 0xffffff], [0xd9b3ff, 0xffffff]],
+    birds: [0xffd23a, 0xff7a3a, 0x3ab0ff], fillers: [['coral', 0.7], ['crystal', 0.3]],
+    target: { kind: 'crystal', cols: [0xffd23a, 0xfff6c0, 0xff9a2a], post: 0xff7a5a },
+    feats: [['pillars', 2], ['arch', 2], ['balloons', 2], ['birds', 2], ['floaters', 1.5], ['gumdrops', 1]] },
+
+  { name: 'Арктика', icon: '🐧', len: 1, seed: 18181,
+    ter: { amp: 1.0, dunes: 0, mtn: 150, mtnW: 40, rough: 1 }, valley: 105,
+    pal: { g: C3(0.92, 0.95, 0.99), gv: C3(0.04, 0.04, 0.03), rock: C3(0.6, 0.7, 0.8), bed: C3(0.3, 0.5, 0.7) },
+    sky: { top: 0x5a9ae0, bottom: 0xeef6ff, fog: [240, 1050], sun: [0xffffff, 2.1], hemi: [0xeaf4ff, 0x8aa0b8, 1.0], exp: 1.0 },
+    road: 0xc0d0e0, waters: [{ zf: 0.3, half: 22, depth: 5, kind: 'water', bridge: true }, { zf: 0.7, half: 22, depth: 5, kind: 'water', bridge: true }],
+    side: [['snowpine', 0.5], ['crystal', 0.5]], sideMaxH: 170, tufts: 'snow', tuftsK: 0.3, clouds: { n: 70, color: 0xffffff, em: 0x9aa7b5 },
+    pillar: { rock: 0xa9d4ee, cap: 0xffffff, tree: 'snowpine' }, wall: { rock: 0xbfe6fa, top: 0xffffff, tree: 'snowpine' }, arch: { rock: 0xa9d4ee },
+    floater: { rock: 0xbfe6fa, top: 0xffffff, under: 0x8fc0dc }, birds: [0x2b2b33], fillers: [['snowpine', 1]],
+    target: { kind: 'crystal', cols: [0x9fe3ff, 0xe8f8ff, 0x3aa0e0], post: 0xdbe7f2 },
+    feats: [['ice', 2.5], ['snowmen', 2], ['pillars', 2], ['skilift', 1], ['balloons', 1], ['floaters', 1.5]] },
+
+  { name: 'Фабрика игрушек', icon: '🧸', len: 1, seed: 19191,
+    ter: { amp: 0.15, dunes: 0, mtn: 30, mtnW: 20, rough: 0.2 }, valley: 110,
+    pal: { g: C3(0.42, 0.38, 0.46), gv: C3(0.04, 0.04, 0.04), rock: C3(0.55, 0.5, 0.58), bed: C3(0.45, 0.42, 0.5), base: 'city' },
+    sky: { top: 0x8a6ac8, bottom: 0xf6dcc8, fog: [260, 1050], sun: [0xfff0e0, 2.2], hemi: [0xf0e0ff, 0x6a5a70, 0.95], exp: 1.05 },
+    road: 0x3a3640, waters: [{ zf: 0.5, half: 22, depth: 5, kind: 'water', bridge: true }],
+    side: [['building', 1]], sideMaxH: 999, tufts: null, clouds: { n: 50, color: 0xfff0f6, em: 0x9a8aa0 },
+    wall: { rock: 0xe0b050, top: 0xc0392b, edge: 0xff4fd8 }, birds: [0xff7ab8], fillers: [],
+    balloonPal: [[0xff4f4f, 0xffd23a], [0x3ab0ff, 0xffffff], [0x7ee36a, 0xffd23a], [0xff9ecb, 0x9b59b6]],
+    target: { kind: 'cans', cols: [0xc0c6cc, 0xff4fd8, 0x3ab0ff], post: 0x7a6a8a },
+    feats: [['buildings', 2.5], ['crane', 2], ['heli', 2], ['billboard', 1.5], ['blimp', 1.5], ['donut', 1], ['balloons', 1]] },
+
+  { name: 'Радужный финал', icon: '🌈', len: 1, seed: 20202,
+    ter: { amp: 2.0, dunes: 0, mtn: 80, mtnW: 45, rough: 1 }, valley: 105,
+    pal: { g: C3(0.55, 0.78, 0.6), gv: C3(0.06, 0.06, 0.05), rock: C3(0.5, 0.45, 0.7), bed: C3(0.4, 0.35, 0.6), base: 'candy' },
+    sky: { top: 0x1a1050, bottom: 0x8a5ac8, fog: [240, 1050], sun: [0xffe6ff, 1.6], hemi: [0xe0c8ff, 0x3a2a6a, 1.1], exp: 1.25, sunCol: [0.9, 0.7, 1.0], night: true },
+    road: 0xb0a0d0, waters: [{ zf: 0.5, half: 22, depth: 5, kind: 'lagoon', bridge: true }],
+    side: [['crystal', 0.5], ['candytree', 0.5]], sideMaxH: 140, tufts: 'candy', tuftsK: 0.6, clouds: { n: 60, color: 0xffe6ff, em: 0x6a4a9a },
+    pillar: { rock: 0x6a5ab0, cap: 0xff9ecb, glowCap: true }, wall: { rock: 0x7a6ac0, top: 0xffd23a, edge: 0xff4fd8, soft: true }, arch: { rock: 0x7a6ac0 },
+    floater: { rock: 0x8a7ad0, top: 0xff9ecb, under: 0x5a4a9a, tree: 'candytree' }, birds: [0xffffff], fillers: [['crystal', 0.5], ['candytree', 0.5]],
+    target: { kind: 'skyballoon', cols: [0xff5a8a, 0xffd23a, 0x9b59b6], air: true },
+    feats: [['rainbow', 2], ['islands', 2], ['floaters', 2], ['lanterns', 2], ['donut', 1.5], ['crystals', 1.5], ['balloons', 1]] },
 ];
+
+// Длины миров (м): до финиша мира k долетает только самолёт с нужной прокачкой.
+// Вода задана долей длины (zf) или старой координатой — её пересчитываем под новую длину
+const LEVEL_LEN = [3000, 3400, 3800, 4200, 4700, 5200, 5600, 6200, 6700, 7200, 7800, 8400, 9000, 9600, 10300, 10900, 11600, 12300, 13000, 13800];
+// Цена эффекта — доля всех мишеней игры (12 в первом мире, +2 в каждом следующем, не больше 40): 10%, 25%, 50%, 75%, 90%
+FX_ORDER.forEach((k, i) => { FX[k].cost = Math.ceil([0.1, 0.25, 0.5, 0.75, 0.9][i] * Array.from({ length: LEVELS.length }, (_, l) => Math.min(40, 12 + l * 2)).reduce((a, b) => a + b, 0)); });
+LEVELS.forEach((L, i) => {
+  const old = L.len; L.len = LEVEL_LEN[i];
+  L.waters = (L.waters || []).map((w) => ({ ...w, z: w.zf !== undefined ? Math.round(w.zf * L.len) : (i === 0 ? w.z : Math.round(w.z * L.len / old)) }));
+});
 
 // =====================================================================
 //  Рельеф
@@ -642,8 +767,10 @@ function addTree(x, z, s, kind) {
     addObstacle([{ t: 'cyl', x, z, r: 0.3 * s, y0: b - 1, y1: b + 5 * s }, { t: 'sph', c: new V3(x, b + 5.8 * s, z), r: 1.7 * s }]);
   } else if (kind === 'deadtree') {
     addObstacle([{ t: 'cyl', x, z, r: 0.5 * s, y0: b - 1, y1: b + 6.5 * s }, { t: 'sph', c: new V3(x, b + 5.5 * s, z), r: 1.6 * s }]);
-  } else if (kind === 'crystal') {
+  } else if (kind === 'crystal' || kind === 'coral') {
     addObstacle([{ t: 'cone', x, z, r0: 1.3 * s, y0: b - 1, y1: b + 6 * s }]);
+  } else if (kind === 'mushroom') {
+    addObstacle([{ t: 'cyl', x, z, r: 0.7 * s, y0: b - 1, y1: b + 4.5 * s }, { t: 'cyl', x, z, r: 2.8 * s, y0: b + 3.8 * s, y1: b + 6.2 * s }]);
   } else {
     addObstacle([trunk, { t: 'sph', c: new V3(x, b + 5.8 * s, z), r: 2.45 * s }]);
   }
@@ -697,7 +824,10 @@ const TREE_PARTS = (() => {
   const crystal = new THREE.OctahedronGeometry(1, 0).scale(1.2, 3.2, 1.2).translate(0, 3, 0);
   const puff = new THREE.IcosahedronGeometry(4, 1).scale(1.6, 0.7, 1.2).translate(0, 1, 0);
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  return { trunk, pineA, pineB, snowCap, round, palmTrunk, palmLeaves, cactus, stick, candy, dead, crystal, puff, box };
+  const stem = new THREE.CylinderGeometry(0.5, 0.7, 4.5, 8).translate(0, 2.25, 0);
+  const cap = new THREE.SphereGeometry(2.8, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.7, 1).translate(0, 4.2, 0);
+  const coral = mergeGeometries([new THREE.CylinderGeometry(0.35, 0.5, 4, 6).translate(0, 2, 0), new THREE.CylinderGeometry(0.25, 0.32, 2.6, 6).rotateZ(0.7).translate(0.9, 3.6, 0), new THREE.CylinderGeometry(0.22, 0.3, 2.2, 6).rotateZ(-0.8).translate(-0.8, 3.3, 0.2), new THREE.SphereGeometry(0.45, 6, 4).translate(0, 4.1, 0)].map(ni));
+  return { trunk, pineA, pineB, snowCap, round, palmTrunk, palmLeaves, cactus, stick, candy, dead, crystal, puff, box, stem, cap, coral };
 })();
 const hsl = (h, s, l) => new THREE.Color().setHSL(h, s, l);
 // Из каких частей собран каждый вид и как окрашен экземпляр
@@ -712,6 +842,10 @@ const TREE_KINDS = {
   deadtree: [['dead', (t) => hsl(0.07, 0.15, 0.18 + hash2(t.x, 2) * 0.1)]],
   crystal: [['crystal', (t) => hsl(0.5 + hash2(t.x, 7) * 0.35, 0.9, 0.62), 'glow']],
   cloudpuff: [['puff', () => hsl(0.6, 0.3, 0.97)]],
+  autumn: [['trunk', 0x5a3a24], ['round', (t) => hsl(0.02 + hash2(t.x, 5) * 0.12, 0.8, 0.45 + hash2(t.z, 2) * 0.1)]],
+  sakura: [['trunk', 0x4a3028], ['round', (t) => hsl(0.93 + hash2(t.x, 5) * 0.05, 0.65, 0.8 + hash2(t.z, 2) * 0.06)]],
+  mushroom: [['stem', 0xf2e8d8], ['cap', (t) => new THREE.Color([0xe0302a, 0xe0302a, 0xff8a2a, 0x9b59b6, 0x3ab0ff][Math.floor(hash2(t.x, t.z) * 5)])]],
+  coral: [['coral', (t) => hsl((0.95 + hash2(t.x, 7) * 0.15) % 1, 0.75, 0.6)]],
   building: [['box', (t) => new THREE.Color([0x8796a8, 0xc9b79c, 0xb0b8c4, 0x9a7f6a, 0xdfe3e8, 0x6f7f95][Math.floor(hash2(t.x, t.z) * 6)])]],
 };
 function buildTrees() {
@@ -746,6 +880,7 @@ function addRock(x, z, s, seed) {
 }
 
 function addPillar(x, z, r, H, seed, st = LVL.pillar) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z) - 2;
   const g = jitter(new THREE.CylinderGeometry(r * 0.72, r, H, 8, 4), r * 0.35, seed);
   statics.add(mesh(g, std(st.rock), x, y + H / 2, z));
@@ -914,8 +1049,8 @@ function addPowerLine(z) {
 }
 
 const wallGaps = [];       // проёмы всех стен уровня
-// Летающие и движущиеся препятствия (шары, дирижабли, вертолёты, птицы, парящие скалы, пончики)
-// не ставим ближе 42 м к стенам с проёмами — иначе они время от времени перекрывают проём
+// Летающие и высокие препятствия (шары, дирижабли, вертолёты, птицы, парящие скалы, пончики, столбы, шипы,
+// тотемы, краны, щиты, леденцы, гейзеры) не ставим ближе 42 м к стенам с проёмами — иначе они перекрывают проём
 const nearWallGap = (z) => wallGaps.some((g) => !g.street && Math.abs(z - g.z) < 42);
 function addWall(z, gaps, seed, st = LVL.wall) {
   for (const g of gaps) wallGaps.push({ z, ...g });
@@ -1037,6 +1172,7 @@ function addSnowman(x, z, s) {
   addObstacle(prims);
 }
 function addIceSpikes(x, z, R, glowing = false) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), n = 3 + Math.floor(R() * 3), prims = [];
   for (let i = 0; i < n; i++) {
     const h = 8 + R() * 12, r = 1.4 + R() * 1.4, px = x + (R() - 0.5) * 12, pz = z + (R() - 0.5) * 10;
@@ -1081,6 +1217,7 @@ function addSkiLift(z, R) {
   }, 4);
 }
 function addTotem(x, z, s, R) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), cols = [0xc0392b, 0x2e86de, 0xf1c40f, 0x27ae60, 0x8e44ad];
   const n = 3 + Math.floor(R() * 2);
   for (let i = 0; i < n; i++) {
@@ -1137,6 +1274,7 @@ function addBuildingsRow(z, R, d) {
   for (const g of gaps) { coinLine(g, 14, z - 16, g, 14, z + 16, 4); wallGaps.push({ z, x: g, w: gapW, y0: terrainH(g, z) + 2, y1: terrainH(g, z) + 24, street: true }); }
 }
 function addCrane(x, z, R) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), H = 40 + R() * 12, yellow = std(0xf1b81c);
   statics.add(mesh(new THREE.BoxGeometry(1.8, H, 1.8), yellow, x, y + H / 2, z));
   for (let k = 3; k < H; k += 3) statics.add(mesh(new THREE.BoxGeometry(2.0, 0.2, 2.0), std(0xc9940f), x, y + k, z, false));
@@ -1186,6 +1324,7 @@ function adTexture(text, bg) {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; adCache.set(key, t); return t;
 }
 function addBillboard(x, z, R) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), texts = ['ЛЕТИ ВЫШЕ!', 'МОРОЖЕНОЕ', 'РОГАТКА-ЛЁТ', 'ПИЦЦА 24/7', 'СУПЕР-ПИЛОТ'], bgs = ['#e74c3c', '#2e86de', '#27ae60', '#8e44ad', '#e67e22'];
   const i = Math.floor(R() * texts.length);
   for (const sx of [-1, 1]) statics.add(mesh(new THREE.CylinderGeometry(0.35, 0.35, 14, 6), std(0x555555), x + sx * 5, y + 7, z));
@@ -1208,6 +1347,7 @@ function pinwheelDisc(r, th, colA, colB, n = 10) {
 }
 const VC_MAT = () => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.45 });
 function addLollipop(x, z, s, R) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), H = 10 * s, r = 3.4 * s;
   statics.add(mesh(new THREE.CylinderGeometry(0.35 * s, 0.35 * s, H, 8), std(0xfaf6f0), x, y + H / 2, z));
   const cols = [[0xff4f8b, 0xffffff], [0x4fc3f7, 0xffffff], [0xffd23a, 0xff6a3a], [0x9b59b6, 0x7fffd4]][Math.floor(R() * 4)];
@@ -1215,6 +1355,7 @@ function addLollipop(x, z, s, R) {
   addObstacle([{ t: 'cyl', x, z, r: 0.45 * s, y0: y - 1, y1: y + H }, { t: 'sph', c: new V3(x, y + H + r * 0.85, z), r: r * 0.95 }]);
 }
 function addCandyCane(x, z, s) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z), H = 14 * s, r = 0.6 * s, n = 8;
   for (let i = 0; i < n; i++) statics.add(mesh(new THREE.CylinderGeometry(r, r, H / n, 10), std(i % 2 ? 0xffffff : 0xe8253a), x, y + (i + 0.5) * H / n, z));
   const hook = mesh(new THREE.TorusGeometry(2.2 * s, r, 8, 16, Math.PI), std(0xe8253a), x + 2.2 * s, y + H, z);
@@ -1238,6 +1379,7 @@ function addDonut(x, z, y, R) {
   coinLine(x, y, z - 6, x, y, z + 6, 3);
 }
 function addGeyser(x, z, R, d) {
+  if (nearWallGap(z)) return;
   const y = terrainH(x, z);
   statics.add(mesh(new THREE.CylinderGeometry(3.2, 4.5, 2, 10, 1, true), std(0x2a2224, { side: THREE.DoubleSide }), x, y + 0.6, z));
   statics.add(mesh(new THREE.CircleGeometry(3.1, 12).rotateX(-Math.PI / 2), std(0xff6a1a, glow(0xff4000, 1.3)), x, y + 1.0, z, false));
@@ -1399,6 +1541,8 @@ const TUFTS = {
   candy(R, c) { c.setHSL(R(), 0.85, 0.62); },
   ember(R, c) { c.setHSL(0.03 + R() * 0.06, 0.95, 0.5); },
   snow(R, c) { c.setRGB(0.95, 0.97, 1); },
+  autumn(R, c) { const k = R(); if (k < 0.12) c.set([0xd9822b, 0xc0392b, 0xf1c40f][Math.floor(R() * 3)]); else c.setHSL(0.09 + R() * 0.06, 0.55, 0.3 + R() * 0.12); },
+  blossom(R, c) { const k = R(); if (k < 0.18) c.set([0xffb7d0, 0xffffff, 0xff8ab0][Math.floor(R() * 3)]); else c.setHSL(0.27 + R() * 0.06, 0.5, 0.32 + R() * 0.1); },
 };
 
 function buildDecor(R) {
@@ -1624,7 +1768,7 @@ function genValley() {
 
 // Остальные уровни собираются из набора «номеров» своего мира. d — сложность 0..1
 function genThemed(idx) {
-  const L = LVL, R = rng(L.seed), d = (idx - 1) / 8, len = FINISH_Z;
+  const L = LVL, R = rng(L.seed), d = (idx - 1) / (LEVELS.length - 2), len = FINISH_Z;
   const rx = (m = 0) => (R() * 2 - 1) * (VALLEY - m);
   const freeOfRoad = (x, z, dd = 6) => !L.road || Math.abs(x - roadX(z)) > dd;
   const pick = (list) => { let k = R() * list.reduce((s, e) => s + e[1], 0); for (const [v, w] of list) { if ((k -= w) <= 0) return v; } return list[0][0]; };
@@ -1766,9 +1910,10 @@ function applyLevelLook() {
   }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   skyDeco.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, fog: false, depthWrite: false })));
-  const moon = new THREE.Mesh(new THREE.SphereGeometry(32, 20, 14), new THREE.MeshBasicMaterial({ color: 0xf2f5ff, fog: false }));
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(k.planetSize || 32, 24, 16), new THREE.MeshBasicMaterial({ color: k.planet || 0xf2f5ff, fog: false }));
   moon.position.copy(sky.material.uniforms.sun.value).multiplyScalar(820);
   skyDeco.add(moon);
+  if (k.noAurora) return;
   auroraMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     uniforms: { t: { value: 0 } },
@@ -1806,7 +1951,7 @@ function loadLevel(i) {
   LVL = LEVELS[i];
   FINISH_Z = LVL.len; VALLEY = LVL.valley; TER = LVL.ter;
   WATERS = (LVL.waters || []).map((w) => ({ ...w }));
-  SPD = 1 + 0.5 * Math.max(0, (i - 1) / 8);
+  SPD = 1 + 0.5 * Math.max(0, (i - 1) / (LEVELS.length - 2));
   newLevelGroups();
   applyLevelLook();
   buildTerrain();
@@ -2736,13 +2881,14 @@ function targetReachable(x, y, z) {
   return ok;
 }
 function buildTargets(idx) {
-  const st = TARGET_STYLES[idx % TARGET_STYLES.length];
+  const st = { ...TARGET_STYLES[idx % TARGET_STYLES.length], ...(LVL.target || {}) };
   const R = rng(LVL.seed * 7 + 991);
-  const n = 12 + idx * 2, z0 = 220, z1 = FINISH_Z - 140;
+  const n = TARGETS_IN(idx), z0 = 220, z1 = FINISH_Z - 140;
   for (let k = 0; k < n; k++) {
     let placed = false;
-    for (let tries = 0; tries < 40 && !placed; tries++) {
-      const z = z0 + (z1 - z0) * (k + 0.2 + R() * 0.6) / n;
+    // сначала ищем место на своём участке трассы, если там тесно (плотная застройка) — где угодно
+    for (let tries = 0; tries < 160 && !placed; tries++) {
+      const z = tries < 40 ? z0 + (z1 - z0) * (k + 0.2 + R() * 0.6) / n : z0 + (z1 - z0) * R();
       const x = roadX(z) * 0.4 + (R() * 2 - 1) * Math.max(20, VALLEY - 40);
       const gy = terrainH(x, z);
       const air = st.air || nearWater(z, 12) || R() < 0.4;
@@ -2790,9 +2936,9 @@ const glowTex = (() => {
 const TARGET_HALO_MAT = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc94a, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 1 });
 // Собранные мишени (сбитые хоть раз) исчезают со своих мест навсегда: номера хранятся в сохранении по мирам
 const tgList = (lv) => save.tgDone[lv] || (save.tgDone[lv] = []);
-const TARGETS_IN = (lv) => 12 + lv * 2;                       // столько мишеней ставится в мире
+const TARGETS_IN = (lv) => Math.min(40, 12 + lv * 2);          // столько мишеней ставится в мире
 const TARGETS_TOTAL = LEVELS_COUNT_TARGETS();
-function LEVELS_COUNT_TARGETS() { let n = 0; for (let i = 0; i < 10; i++) n += TARGETS_IN(i); return n; }
+function LEVELS_COUNT_TARGETS() { let n = 0; for (let i = 0; i < LEVELS.length; i++) n += TARGETS_IN(i); return n; }
 const hitsTotal = () => Object.values(save.tgDone).reduce((n, a) => n + a.length, 0);   // очки меткости = собрано всего
 function resetTargets() {
   const done = new Set(tgList(levelIdx));
@@ -3426,8 +3572,8 @@ function collectStuff() {
       spawnSparks(c.pos);
     }
   }
-  // Кольцо засчитывается, только если сквозь него прошёл весь фюзеляж:
-  // и нос, и хвост пересекли плоскость кольца внутри него (с запасом на толщину корпуса)
+  // Кольцо засчитывается, если сквозь него прошёл весь фюзеляж:
+  // и нос, и хвост пересекли плоскость кольца внутри его контура
   _f.set(0, 0, 1).applyQuaternion(P.q);
   const nose = _tmp.copy(P.pos).addScaledVector(_f, 2.1), tail = _tmp2.copy(P.pos).addScaledVector(_f, -2.1);
   const crossing = (a, b, c) => {
@@ -3437,7 +3583,7 @@ function collectStuff() {
   };
   for (const r of rings) {
     if (r.taken || Math.abs(r.c.z - P.pos.z) > 12) continue;
-    const inner = r.R - r.tube - 0.45;
+    const inner = r.R - r.tube * 0.3;          // нос и хвост внутри контура кольца; задеть край можно
     const dn = crossing(P.prevNose, nose, r.c);
     if (dn !== null) r.noseOk = dn < inner;
     const dt = crossing(P.prevTail, tail, r.c);
@@ -3655,7 +3801,7 @@ function finishResults() {
       save.unlocked = levelIdx + 1;
       rec = `Открыт новый мир: ${LEVELS[levelIdx + 1].icon} ${LEVELS[levelIdx + 1].name}!`;
       P.unlockedNew = true;
-    } else if (first) rec = levelIdx === LEVELS.length - 1 ? 'Ты прошёл все 10 миров! Ты настоящий ас!' : 'Ты долетел до финиша! Ура!';
+    } else if (first) rec = levelIdx === LEVELS.length - 1 ? `Ты прошёл все ${LEVELS.length} миров! Ты настоящий ас!` : 'Ты долетел до финиша! Ура!';
   }
   persist();
 
@@ -3866,7 +4012,7 @@ document.querySelectorAll('#dev [data-money]').forEach((b) => b.addEventListener
 }));
 $('dev-money-zero').addEventListener('click', () => { save.money = 0; persist(); renderShop(); toast('Баланс обнулён'); });
 $('dev-hits').addEventListener('click', () => {            // отметить все мишени собранными
-  for (let i = 0; i < 10; i++) save.tgDone[i] = Array.from({ length: TARGETS_IN(i) }, (_, k) => k);
+  for (let i = 0; i < LEVELS.length; i++) save.tgDone[i] = Array.from({ length: TARGETS_IN(i) }, (_, k) => k);
   persist(); resetTargets(); renderShop(); toast('Все мишени собраны');
 });
 $('dev-fx-zero').addEventListener('click', () => { save.tgDone = {}; save.fx = {}; save.fxOn = {}; persist(); resetTargets(); rebuildPlane(); placeOnSlingshot(); renderShop(); toast('Эффекты сброшены, мишени вернулись'); });
